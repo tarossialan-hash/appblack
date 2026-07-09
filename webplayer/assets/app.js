@@ -1146,40 +1146,30 @@ function updateKeyboardLayout() {
 
 // Navegação Espacial Complexa para o Teclado
 document.addEventListener('keydown', function(e) {
-    const vkContainer = document.getElementById('virtual-keyboard');
-    if (!vkContainer || vkContainer.style.display === 'none') return;
+    // Este listener só age quando o teclado virtual está aberto
+    if (!isKeyboardOpen) return;
     
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         // Deixa o WebView nativo da TV fazer a navegação espacial perfeitamente
-        // Removido o cálculo manual que causava o "Pulo Duplo" (Double Jump)
     } else if (e.key === 'Escape') {
-        if (vkContainer && vkContainer.style.display !== 'none') {
-            e.preventDefault();
-            e.stopPropagation();
-            closeKeyboard();
-        } else {
-            voltarParaInicio(e);
-        }
+        // NÃO fazer nada aqui — o listener global (linha ~1642) cuida do Escape usando isKeyboardOpen
+        // Se tratarmos aqui, o evento continua borbulhando para o listener global
     } else if (e.key === 'Backspace') {
-        if (vkContainer && vkContainer.style.display !== 'none') {
-            if (currentInput && currentInput.value.length > 0) {
-                currentInput.value = currentInput.value.slice(0, -1);
-            } else {
-                closeKeyboard();
-            }
+        if (currentInput && currentInput.value.length > 0) {
+            currentInput.value = currentInput.value.slice(0, -1);
         } else {
-            voltarParaInicio(e);
+            closeKeyboard();
         }
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
         // Suporte para Ctrl+V (Colar) no PC
-        if (vkContainer && vkContainer.style.display !== 'none' && currentInput && navigator.clipboard) {
+        if (currentInput && navigator.clipboard) {
             navigator.clipboard.readText().then(text => {
                 currentInput.value += text;
             }).catch(err => console.error("Erro ao colar:", err));
         }
     } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        // Suporte para digitar usando o teclado físico do PC (no emulador) enquanto o teclado virtual está aberto
-        if (vkContainer && vkContainer.style.display !== 'none' && currentInput) {
+        // Suporte para digitar usando o teclado físico do PC enquanto o teclado virtual está aberto
+        if (currentInput) {
             currentInput.value += e.key;
         }
     }
