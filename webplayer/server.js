@@ -2,13 +2,26 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Servir os arquivos estáticos do app Android
-const assetsPath = path.join(__dirname, '..', 'app', 'src', 'main', 'assets');
+// Resolve o caminho dos assets de forma flexível (funciona tanto localmente quanto no Render)
+function findAssetsPath() {
+    const candidates = [
+        path.join(__dirname, '..', 'app', 'src', 'main', 'assets'), // Local (estrutura Android Studio)
+        path.join(__dirname, 'assets'),                               // Render (pasta local)
+    ];
+    for (const p of candidates) {
+        if (fs.existsSync(p)) return p;
+    }
+    return candidates[0]; // fallback
+}
+
+const assetsPath = findAssetsPath();
+console.log(`📁 Servindo assets de: ${assetsPath}`);
 app.use(express.static(assetsPath));
 
 // Proxy para a API JSON do Xtream
@@ -48,10 +61,9 @@ app.get('/proxy-stream', async (req, res) => {
             method: 'get',
             url: streamUrl,
             responseType: 'stream',
-            timeout: 10000 // 10s timeout to connect
+            timeout: 10000
         });
         
-        // Repassar os headers importantes
         res.set('Access-Control-Allow-Origin', '*');
         if (response.headers['content-type']) {
             res.set('Content-Type', response.headers['content-type']);
@@ -60,7 +72,7 @@ app.get('/proxy-stream', async (req, res) => {
         response.data.pipe(res);
         
         req.on('close', () => {
-            response.data.destroy(); // Cancelar o stream se o cliente fechar
+            response.data.destroy();
         });
         
     } catch (error) {
@@ -69,7 +81,7 @@ app.get('/proxy-stream', async (req, res) => {
     }
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 WebPlayer Backend rodando em http://localhost:${PORT}`);
 });
