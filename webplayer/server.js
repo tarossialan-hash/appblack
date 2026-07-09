@@ -22,6 +22,17 @@ function findAssetsPath() {
 
 const assetsPath = findAssetsPath();
 console.log(`📁 Servindo assets de: ${assetsPath}`);
+
+// Desabilita cache para JS/CSS — garante que o browser sempre pega a versão mais nova
+app.use((req, res, next) => {
+    if (req.path.match(/\.(js|css)$/)) {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+    }
+    next();
+});
+
 app.use(express.static(assetsPath));
 
 // Proxy TMDB — Filmes em Cartaz para o carrossel da Home
