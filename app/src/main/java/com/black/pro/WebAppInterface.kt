@@ -362,7 +362,7 @@ class WebAppInterface(
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val jsonText = URL("https://raw.githubusercontent.com/alantarossi/BLACK/main/update.json").readText()
+                val jsonText = URL("https://raw.githubusercontent.com/tarossialan-hash/appblack/main/update.json").readText()
                 val json = JSONObject(jsonText)
                 val remoteVersionCode = json.getInt("versionCode")
                 val remoteVersionName = json.getString("versionName")
