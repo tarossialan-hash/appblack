@@ -328,6 +328,32 @@ class WebBridge {
             onSearchResultsLoaded(JSON.stringify(results));
         }
     }
+
+    checkForUpdates() {
+        console.log("🌐 WebBridge: Simulando checagem de atualizações...");
+        setTimeout(() => {
+            if (typeof showUpdateModal === 'function') {
+                showUpdateModal('1.0.1', 'https://raw.githubusercontent.com/tarossialan-hash/appblack/main/app-release.apk');
+            }
+        }, 1500);
+    }
+
+    downloadAndInstallApk(apkUrl) {
+        console.log("🌐 WebBridge: Simulando download do APK:", apkUrl);
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += 10;
+            if (typeof updateDownloadProgress === 'function') {
+                updateDownloadProgress(progress);
+            }
+            if (progress >= 100) {
+                clearInterval(interval);
+                setTimeout(() => {
+                    alert("🌐 WebBridge: [Simulação] Download concluído! Iniciando o pacote de instalação do APK: " + apkUrl);
+                }, 200);
+            }
+        }, 300);
+    }
 }
 
 // Injetar o WebBridge automaticamente se não estivermos no Android Nativo

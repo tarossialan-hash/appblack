@@ -38,6 +38,7 @@
                 <p class="terms-text">Ao continuar, você concorda com os Termos de Uso...</p>
                 
                 <button class="demo-button" onclick="document.getElementById('username').value='demo'; document.getElementById('password').value='demo';">Demo</button>
+                <button id="login-update-btn" class="demo-button" style="display: none; border-color: #f39c12; color: #f39c12; margin-left: 10px;" onclick="abrirUpdateConfirmModalDirectly()" tabindex="0">Atualização Disponível</button>
             </div>
 
             <div class="login-right">
@@ -92,6 +93,10 @@
                     <button class="nav-item" onclick="mostrarCategoria(this, 'series')">Séries</button>
                 </div>
                 <div class="nav-right">
+                    <button id="nav-update-btn" class="action-btn" onclick="abrirUpdateConfirmModalDirectly()" style="display: none; color: #f39c12; font-weight: bold; font-size: 13px; gap: 6px; padding: 6px 12px; border: 1px solid #f39c12; border-radius: 20px; background: rgba(243, 156, 18, 0.1); align-items: center; justify-content: center; margin-right: 12px;" tabindex="0">
+                        <span style="width: 8px; height: 8px; background-color: #f39c12; border-radius: 50%; display: inline-block;"></span>
+                        Atualizar App
+                    </button>
                     <button class="action-btn" onclick="buscar()">
                         <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     </button>
