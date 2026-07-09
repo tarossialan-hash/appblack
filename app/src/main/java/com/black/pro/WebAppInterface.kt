@@ -362,15 +362,22 @@ class WebAppInterface(
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val jsonText = URL("https://raw.githubusercontent.com/tarossialan-hash/appblack/main/update.json").readText()
-                val json = JSONObject(jsonText)
-                val remoteVersionCode = json.getInt("versionCode")
-                val remoteVersionName = json.getString("versionName")
-                val apkUrl = json.getString("apkUrl")
+                val request = okhttp3.Request.Builder()
+                    .url("https://raw.githubusercontent.com/tarossialan-hash/appblack/main/update.json")
+                    .build()
                 
-                if (remoteVersionCode > currentVersionCode) {
-                    withContext(Dispatchers.Main) {
-                        webView.evaluateJavascript("javascript:showUpdateModal('$remoteVersionName', '$apkUrl')", null)
+                NetworkModule.okHttpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@launch
+                    val jsonText = response.body?.string() ?: return@launch
+                    val json = JSONObject(jsonText)
+                    val remoteVersionCode = json.getInt("versionCode")
+                    val remoteVersionName = json.getString("versionName")
+                    val apkUrl = json.getString("apkUrl")
+                    
+                    if (remoteVersionCode > currentVersionCode) {
+                        withContext(Dispatchers.Main) {
+                            webView.evaluateJavascript("javascript:showUpdateModal('$remoteVersionName', '$apkUrl')", null)
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -387,42 +394,47 @@ class WebAppInterface(
                     webView.evaluateJavascript("javascript:updateDownloadProgress(0)", null)
                 }
                 
-                val url = URL(apkUrl)
-                val connection = url.openConnection()
-                connection.connect()
-                val fileLength = connection.contentLength
+                val request = okhttp3.Request.Builder()
+                    .url(apkUrl)
+                    .build()
                 
-                val cacheDir = activity.cacheDir
-                val apkFile = File(cacheDir, "update.apk")
-                if (apkFile.exists()) {
-                    apkFile.delete()
-                }
-                
-                url.openStream().use { input ->
-                    apkFile.outputStream().use { output ->
-                        val data = ByteArray(2048)
-                        var total: Long = 0
-                        var count: Int
-                        var lastPercent = 0
-                        while (input.read(data).also { count = it } != -1) {
-                            total += count
-                            output.write(data, 0, count)
-                            if (fileLength > 0) {
-                                val percent = ((total * 100) / fileLength).toInt()
-                                if (percent != lastPercent) {
-                                    lastPercent = percent
-                                    withContext(Dispatchers.Main) {
-                                        webView.evaluateJavascript("javascript:updateDownloadProgress($percent)", null)
+                NetworkModule.okHttpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw Exception("HTTP error code: ${response.code}")
+                    val body = response.body ?: throw Exception("Resposta do servidor vazia")
+                    val fileLength = body.contentLength()
+                    
+                    val cacheDir = activity.cacheDir
+                    val apkFile = File(cacheDir, "update.apk")
+                    if (apkFile.exists()) {
+                        apkFile.delete()
+                    }
+                    
+                    body.byteStream().use { input ->
+                        apkFile.outputStream().use { output ->
+                            val data = ByteArray(2048)
+                            var total: Long = 0
+                            var count: Int
+                            var lastPercent = 0
+                            while (input.read(data).also { count = it } != -1) {
+                                total += count
+                                output.write(data, 0, count)
+                                if (fileLength > 0) {
+                                    val percent = ((total * 100) / fileLength).toInt()
+                                    if (percent != lastPercent) {
+                                        lastPercent = percent
+                                        withContext(Dispatchers.Main) {
+                                            webView.evaluateJavascript("javascript:updateDownloadProgress($percent)", null)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-                
-                withContext(Dispatchers.Main) {
-                    webView.evaluateJavascript("javascript:updateDownloadProgress(100)", null)
-                    installApk(apkFile)
+                    
+                    withContext(Dispatchers.Main) {
+                        webView.evaluateJavascript("javascript:updateDownloadProgress(100)", null)
+                        installApk(apkFile)
+                    }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {

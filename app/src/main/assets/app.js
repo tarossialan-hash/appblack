@@ -103,7 +103,15 @@ function onLoginSuccess(username) {
 function onLoginError(message) {
     document.getElementById("sync-screen").style.display = "none";
     document.getElementById("login-screen").style.display = "flex";
-    document.getElementById("login-status").innerText = message;
+    
+    let friendlyMessage = message;
+    if (!message || message.includes("404") || message.includes("401") || message.includes("not found") || message.includes("unauthorized") || message.includes("HTTP")) {
+        friendlyMessage = "Usuário ou senha incorretos. Verifique os dados.";
+    } else if (message.includes("timeout") || message.includes("connect") || message.includes("Unable to resolve host")) {
+        friendlyMessage = "Falha de conexão com o servidor. Tente novamente.";
+    }
+    
+    document.getElementById("login-status").innerText = friendlyMessage;
 }
 
 function sair() {
@@ -125,6 +133,11 @@ function recarregar() {
     document.getElementById("sync-screen").style.display = "flex";
     document.getElementById("sync-status-text").innerText = "Sincronizando banco de dados...";
     document.getElementById("sync-progress").style.width = "0%";
+    
+    // Verifica atualizações ao mesmo tempo
+    if (window.AndroidApp && typeof window.AndroidApp.checkForUpdates === 'function') {
+        window.AndroidApp.checkForUpdates();
+    }
     
     if (window.AndroidApp && user && pass) {
         window.AndroidApp.login(user, pass);

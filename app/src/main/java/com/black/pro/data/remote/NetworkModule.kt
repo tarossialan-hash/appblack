@@ -38,6 +38,8 @@ object NetworkModule {
 
     private val unsafeClient by lazy { getUnsafeOkHttpClient() }
 
+    val okHttpClient: OkHttpClient by lazy { unsafeClient }
+
     private val retrofit by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
