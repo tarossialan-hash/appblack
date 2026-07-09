@@ -1043,16 +1043,20 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+let isKeyboardOpen = false;
+
 function openKeyboard(inputId) {
     currentInput = document.getElementById(inputId);
     const vk = document.getElementById('virtual-keyboard');
     vk.style.display = 'flex';
+    isKeyboardOpen = true;
     // Foca na primeira tecla 'q'
     setTimeout(() => { document.querySelector('.vk-key').focus(); }, 100);
 }
 
 function closeKeyboard() {
     document.getElementById('virtual-keyboard').style.display = 'none';
+    isKeyboardOpen = false;
     if(currentInput) currentInput.focus();
     currentInput = null;
 }
@@ -1639,11 +1643,10 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         e.preventDefault();
         
-        // Se o teclado virtual estiver aberto, fecha ele e consome o evento para evitar abrir o modal de saída
-        const vkContainer = document.getElementById('virtual-keyboard');
-        if (vkContainer && vkContainer.style.display !== 'none') {
+        // Se o teclado virtual estiver aberto, fecha ele e NÃO chama o modal de saída
+        if (isKeyboardOpen) {
             closeKeyboard();
-            return;
+            return; // bloqueia o modal de saída
         }
         
         window.handleAndroidBack();
