@@ -287,6 +287,7 @@ class WebBridge {
             title: "O Conde de Monte Cristo", 
             overview: "O jovem Edmond Dantès é alvo de uma trama sinistra e acaba sendo preso no dia de seu casamento. Após 14 anos, ele consegue fugir e assume a identidade do Conde de Monte Cristo para se vingar.",
             backdropUrl: "https://image.tmdb.org/t/p/original/9kcTsX2laYclN4bFiMH3RuhZel2.jpg",
+            posterPath: "/9kcTsX2laYclN4bFiMH3RuhZel2.jpg",
             logoUrl: "https://placehold.co/800x200/transparent/white?text=O+Conde+de+Monte+Cristo",
             releaseYear: "2024", voteAverage: 8.5, ageRating: "14"
         }];

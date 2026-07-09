@@ -48,6 +48,7 @@ app.get('/api/tmdb/now-playing', async (req, res) => {
             title: m.title,
             overview: m.overview,
             backdropUrl: m.backdrop_path ? `https://image.tmdb.org/t/p/original${m.backdrop_path}` : '',
+            posterPath: m.poster_path || '',
             releaseYear: m.release_date ? m.release_date.substring(0, 4) : '',
             voteAverage: m.vote_average ? m.vote_average.toFixed(1) : '',
             ageRating: ''
