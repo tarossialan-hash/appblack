@@ -292,13 +292,12 @@ body {
     background: transparent;
     border: none;
     color: rgba(255,255,255,0.7);
-    font-size: 16px;
-    font-weight: 500;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
     cursor: pointer;
-    padding: 8px 12px;
+    width: 40px;
+    height: 40px;
     border-radius: 8px;
     transition: all 0.2s;
     outline: none;
@@ -312,14 +311,14 @@ body {
 .action-btn:focus {
     background-color: #fff;
     color: #000;
-    border-color: #fff;
     outline: none;
     transform: scale(1.1);
     box-shadow: 0 4px 15px rgba(255,255,255,0.3);
 }
 
 .action-btn .icon {
-    font-size: 20px;
+    width: 20px;
+    height: 20px;
 }
 
 .divider {

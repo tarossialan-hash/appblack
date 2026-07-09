@@ -116,6 +116,7 @@ function onLoginError(message) {
 
 function sair() {
     localStorage.removeItem('logged_in_user');
+    localStorage.removeItem('wb_simulated_version'); // Reseta a versão simulada da web para facilitar testes
     document.getElementById("login-screen").style.display = "flex";
     document.getElementById("home-screen").style.display = "none";
     document.getElementById("login-status").innerText = "";
@@ -1031,6 +1032,17 @@ document.getElementById('password').addEventListener('click', () => openKeyboard
 // Para suportar navegação via Enter pelo D-PAD no input:
 document.getElementById('username').addEventListener('keydown', (e) => { if(e.key === 'Enter') openKeyboard('username'); });
 document.getElementById('password').addEventListener('keydown', (e) => { if(e.key === 'Enter') openKeyboard('password'); });
+
+// Garante que botões de ação respondam ao Enter do D-PAD/Controle Remoto
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        const active = document.activeElement;
+        if (active && active.classList.contains('action-btn')) {
+            e.preventDefault();
+            active.click();
+        }
+    }
+});
 
 function openKeyboard(inputId) {
     currentInput = document.getElementById(inputId);

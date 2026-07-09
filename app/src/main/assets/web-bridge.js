@@ -6,6 +6,7 @@ class WebBridge {
         this.movies = null;
         this.series = null;
         this.searchDataPromise = null;
+        this.simulatedVersion = localStorage.getItem('wb_simulated_version') || "1.0.0 (Web)";
 
         // Se já tiver credenciais salvas, começa a buscar em segundo plano
         if (this.serverUrl && this.username && this.password) {
@@ -331,11 +332,13 @@ class WebBridge {
 
     checkForUpdates() {
         console.log("🌐 WebBridge: Simulando checagem de atualizações...");
-        setTimeout(() => {
-            if (typeof showUpdateModal === 'function') {
-                showUpdateModal('1.0.1', 'https://raw.githubusercontent.com/tarossialan-hash/appblack/main/app-release.apk');
-            }
-        }, 1500);
+        if (this.simulatedVersion.includes("1.0.0")) {
+            setTimeout(() => {
+                if (typeof showUpdateModal === 'function') {
+                    showUpdateModal('1.0.1', 'https://raw.githubusercontent.com/tarossialan-hash/appblack/main/app-release.apk');
+                }
+            }, 1500);
+        }
     }
 
     downloadAndInstallApk(apkUrl) {
@@ -349,14 +352,31 @@ class WebBridge {
             if (progress >= 100) {
                 clearInterval(interval);
                 setTimeout(() => {
-                    alert("🌐 WebBridge: [Simulação] Download concluído! Iniciando o pacote de instalação do APK: " + apkUrl);
-                }, 200);
+                    // Salva a versão simulada no localStorage para persistir nos reloads!
+                    localStorage.setItem('wb_simulated_version', '1.0.1 (Web)');
+                    
+                    // Fecha o modal de atualização
+                    if (typeof fecharUpdateModal === 'function') {
+                        fecharUpdateModal();
+                    }
+                    
+                    // Esconde as pílulas/badges
+                    const navBtn = document.getElementById('nav-update-btn');
+                    if (navBtn) navBtn.style.display = 'none';
+                    const loginBtn = document.getElementById('login-update-btn');
+                    if (loginBtn) loginBtn.style.display = 'none';
+                    
+                    // Simula reinício automático do app recarregando a página
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                }, 500);
             }
         }, 300);
     }
 
     getAppVersion() {
-        return "1.0.0 (Web)";
+        return this.simulatedVersion;
     }
 }
 
