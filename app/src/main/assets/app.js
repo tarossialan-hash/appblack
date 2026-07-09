@@ -1150,6 +1150,8 @@ document.addEventListener('keydown', function(e) {
         // Removido o cálculo manual que causava o "Pulo Duplo" (Double Jump)
     } else if (e.key === 'Escape') {
         if (vkContainer && vkContainer.style.display !== 'none') {
+            e.preventDefault();
+            e.stopPropagation();
             closeKeyboard();
         } else {
             voltarParaInicio(e);
