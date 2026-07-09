@@ -116,7 +116,6 @@ function onLoginError(message) {
 
 function sair() {
     localStorage.removeItem('logged_in_user');
-    localStorage.removeItem('wb_simulated_version'); // Reseta a versão simulada da web para facilitar testes
     document.getElementById("login-screen").style.display = "flex";
     document.getElementById("home-screen").style.display = "none";
     document.getElementById("login-status").innerText = "";
@@ -1637,6 +1636,14 @@ window.handleAndroidBack = function() {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         e.preventDefault();
+        
+        // Se o teclado virtual estiver aberto, fecha ele e consome o evento para evitar abrir o modal de saída
+        const vkContainer = document.getElementById('virtual-keyboard');
+        if (vkContainer && vkContainer.style.display !== 'none') {
+            closeKeyboard();
+            return;
+        }
+        
         window.handleAndroidBack();
     }
 });
