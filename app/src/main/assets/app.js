@@ -282,90 +282,120 @@ function mostrarCategoria(btn, cat) {
 function onBannerItemsLoaded(jsonString) {
     let items = [];
     try { items = JSON.parse(jsonString); } catch(e) {}
-    if (items.length === 0) return;
-    
-    const bannerContainer = document.getElementById('dynamic-hero-banner');
-    if (!bannerContainer) return;
+    if (!items || items.length === 0) return;
 
-    // Gera os slides
-    let slidesHtml = '';
-    let dotsHtml = '';
-    items.forEach((item, i) => {
-        const logoImg = item.logoUrl
-            ? `<img class="hero-slide-logo" src="${item.logoUrl}" onerror="this.style.display='none'" />`
-            : '';
-        
-        const ratingChip = item.voteAverage
-            ? `<span class="hero-meta-chip rating">&#9733; ${parseFloat(item.voteAverage).toFixed(1)}</span>`
-            : '';
-        const yearChip = item.releaseYear
-            ? `<span class="hero-meta-chip">${item.releaseYear}</span>`
-            : '';
-        const ageChip = item.ageRating
-            ? `<span class="hero-meta-chip">${item.ageRating}</span>`
-            : '';
-        const overviewText = item.overview || '';
+    const container = document.getElementById('dynamic-hero-banner');
+    if (!container) return;
 
-        const bgStyle = item.backdropUrl 
-            ? `background-image: url('${item.backdropUrl}'), linear-gradient(135deg, #151522 0%, #07070a 100%)`
-            : `background-image: linear-gradient(135deg, #151522 0%, #07070a 100%)`;
+    const AUTOPLAY_MS = 8000;
+    let current = 0;
+    let progressTimer = null;
+    let progressStart = null;
+    let progressPaused = false;
 
-        slidesHtml += `
-            <div class="hero-slide">
-                <div class="hero-slide-bg" style="${bgStyle};"></div>
-                <div class="hero-slide-gradient"></div>
-                <div class="hero-slide-content">
-                    ${logoImg}
-                    <div class="hero-slide-title">${item.title || ''}</div>
-                    <div class="hero-slide-meta">
-                        ${ratingChip}${yearChip}${ageChip}
-                    </div>
-                    <div class="hero-slide-overview">${overviewText}</div>
-                </div>
-            </div>`;
-        dotsHtml += `<div class="hero-dot${i === 0 ? ' active' : ''}" data-index="${i}"></div>`;
-    });
-
-    bannerContainer.innerHTML = `
-        <div class="hero-carousel-inner" id="hero-carousel-inner">${slidesHtml}</div>
-        <button class="hero-arrow hero-arrow-prev" tabindex="0" id="hero-prev">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-        <button class="hero-arrow hero-arrow-next" tabindex="0" id="hero-next">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
-        <div class="hero-dots" id="hero-dots">${dotsHtml}</div>
-    `;
-
-    // Lógica do Carrossel
-    let currentSlide = 0;
-    const totalSlides = items.length;
-    const inner = document.getElementById('hero-carousel-inner');
-    const dots = document.querySelectorAll('#hero-dots .hero-dot');
-
-    function goToSlide(index) {
-        if (index < 0) index = totalSlides - 1;
-        if (index >= totalSlides) index = 0;
-        currentSlide = index;
-        inner.style.transform = `translateX(-${currentSlide * 100}%)`;
-        dots.forEach((d, i) => d.classList.toggle('active', i === currentSlide));
+    function posterUrl(item) {
+        if (item.posterPath) return `https://image.tmdb.org/t/p/w342${item.posterPath}`;
+        return '';
     }
 
-    document.getElementById('hero-prev').addEventListener('click', (e) => { e.stopPropagation(); goToSlide(currentSlide - 1); });
-    document.getElementById('hero-next').addEventListener('click', (e) => { e.stopPropagation(); goToSlide(currentSlide + 1); });
-    dots.forEach(dot => dot.addEventListener('click', () => goToSlide(parseInt(dot.dataset.index))));
+    function render(index) {
+        const item = items[index];
+        const backdrop = item.backdropUrl || '';
+        const poster   = posterUrl(item);
 
-    // Auto-play a cada 6 segundos
-    let autoPlay = setInterval(() => goToSlide(currentSlide + 1), 6000);
-    bannerContainer.addEventListener('mouseenter', () => clearInterval(autoPlay));
-    bannerContainer.addEventListener('mouseleave', () => { autoPlay = setInterval(() => goToSlide(currentSlide + 1), 6000); });
+        const ratingChip = item.voteAverage
+            ? `<span class="spotlight-chip rating">&#9733; ${parseFloat(item.voteAverage).toFixed(1)}</span>` : '';
+        const yearChip = item.releaseYear
+            ? `<span class="spotlight-chip">${item.releaseYear}</span>` : '';
 
-    // Mostrar a seção de últimos adicionados (se existir) - esconde pois usamos o carousel
+        const thumbsHtml = items.map((m, i) =>
+            `<img class="spotlight-thumb${i === index ? ' active' : ''}"
+                  src="${m.backdropUrl || ''}"
+                  data-idx="${i}"
+                  alt="${m.title || ''}"
+                  onerror="this.style.opacity='0'">`
+        ).join('');
+
+        const posterHtml = poster
+            ? `<img class="spotlight-poster" src="${poster}" alt="${item.title || ''}" onerror="this.style.display='none'">`
+            : `<div class="spotlight-poster-placeholder"></div>`;
+
+        container.innerHTML = `
+            <div class="spotlight-backdrop" style="background-image:url('${backdrop}')"></div>
+            <div class="spotlight-gradient"></div>
+
+            <button class="spotlight-arrow prev" id="sp-prev">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <button class="spotlight-arrow next" id="sp-next">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+
+            <div class="spotlight-content">
+                ${posterHtml}
+                <div class="spotlight-info">
+                    <div class="spotlight-badge">&#9654; Em Cartaz</div>
+                    <div class="spotlight-title">${item.title || ''}</div>
+                    <div class="spotlight-meta">${ratingChip}${yearChip}</div>
+                    <div class="spotlight-overview">${item.overview || ''}</div>
+                    <div class="spotlight-progress-bar">
+                        <div class="spotlight-progress-fill" id="sp-progress"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="spotlight-thumbnails">${thumbsHtml}</div>
+        `;
+
+        // Eventos das setas
+        document.getElementById('sp-prev').onclick = (e) => { e.stopPropagation(); go(current - 1); };
+        document.getElementById('sp-next').onclick = (e) => { e.stopPropagation(); go(current + 1); };
+
+        // Eventos dos thumbnails
+        container.querySelectorAll('.spotlight-thumb').forEach(thumb => {
+            thumb.onclick = () => go(parseInt(thumb.dataset.idx));
+        });
+
+        // Pausa no hover
+        container.onmouseenter = () => { progressPaused = true; };
+        container.onmouseleave = () => {
+            progressPaused = false;
+            progressStart = performance.now() - (progressPaused ? 0 : 0);
+        };
+
+        startProgress();
+    }
+
+    function startProgress() {
+        cancelAnimationFrame(progressTimer);
+        progressStart = performance.now();
+        const fill = document.getElementById('sp-progress');
+        if (!fill) return;
+
+        function tick(now) {
+            if (progressPaused) { progressTimer = requestAnimationFrame(tick); return; }
+            const elapsed = now - progressStart;
+            const pct = Math.min((elapsed / AUTOPLAY_MS) * 100, 100);
+            fill.style.width = pct + '%';
+            if (pct >= 100) { go(current + 1); return; }
+            progressTimer = requestAnimationFrame(tick);
+        }
+        progressTimer = requestAnimationFrame(tick);
+    }
+
+    function go(index) {
+        current = ((index % items.length) + items.length) % items.length;
+        cancelAnimationFrame(progressTimer);
+        render(current);
+    }
+
+    render(0);
+
     const latestSection = document.getElementById('home-latest-section');
     if (latestSection) latestSection.style.display = 'none';
 }
 
-// ==========================================
+// ==============================================================================
 // CALLBACKS DA TV AO VIVO
 // ==========================================
 function onLiveCategoriesLoaded(jsonString) {

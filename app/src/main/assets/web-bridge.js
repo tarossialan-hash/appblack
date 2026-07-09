@@ -55,7 +55,7 @@ class WebBridge {
 
     async _apiCall(action, extraParams = {}) {
         try {
-            const response = await fetch('http://localhost:3000/api/xtream', {
+            const response = await fetch('/api/xtream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -248,21 +248,41 @@ class WebBridge {
     getStreamUrl(streamId) {
         // Assume 'live' by default for compatibility
         const realUrl = `${this.serverUrl}/live/${this.username}/${this.password}/${streamId}.ts`;
-        return `http://localhost:3000/proxy-stream?url=${encodeURIComponent(realUrl)}`;
+        return `${window.location.origin}/proxy-stream?url=${encodeURIComponent(realUrl)}`;
     }
     
     getVodStreamUrl(streamId, extension = 'mp4') {
         const realUrl = `${this.serverUrl}/movie/${this.username}/${this.password}/${streamId}.${extension}`;
-        return `http://localhost:3000/proxy-stream?url=${encodeURIComponent(realUrl)}`;
+        return `${window.location.origin}/proxy-stream?url=${encodeURIComponent(realUrl)}`;
     }
     
     getSeriesStreamUrl(streamId, extension = 'mp4') {
         const realUrl = `${this.serverUrl}/series/${this.username}/${this.password}/${streamId}.${extension}`;
-        return `http://localhost:3000/proxy-stream?url=${encodeURIComponent(realUrl)}`;
+        return `${window.location.origin}/proxy-stream?url=${encodeURIComponent(realUrl)}`;
     }
     
-    // Stub para funções extras chamadas no início
     getBannerItems() {
+        console.log("🌐 WebBridge: Buscando filmes reais do TMDB via proxy...");
+        fetch('/api/tmdb/now-playing')
+            .then(r => r.json())
+            .then(data => {
+                if (data && Array.isArray(data) && data.length > 0) {
+                    console.log("🌐 WebBridge: Filmes reais do TMDB obtidos com sucesso.");
+                    if (typeof onBannerItemsLoaded === 'function') {
+                        onBannerItemsLoaded(JSON.stringify(data));
+                    }
+                } else {
+                    console.warn("🌐 WebBridge: API TMDB retornou vazia, usando fallback.");
+                    this._sendMockBanner();
+                }
+            })
+            .catch(err => {
+                console.error("🌐 WebBridge: Erro ao buscar TMDB, usando fallback:", err);
+                this._sendMockBanner();
+            });
+    }
+
+    _sendMockBanner() {
         const mockBanner = [{
             title: "O Conde de Monte Cristo", 
             overview: "O jovem Edmond Dantès é alvo de uma trama sinistra e acaba sendo preso no dia de seu casamento. Após 14 anos, ele consegue fugir e assume a identidade do Conde de Monte Cristo para se vingar.",

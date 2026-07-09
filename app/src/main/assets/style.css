@@ -1915,3 +1915,191 @@ body {
     width: 100%;
 }
 
+/* =======================================================
+   SPOTLIGHT BANNER — TMDB (novo layout premium)
+   ======================================================= */
+
+#dynamic-hero-banner {
+    position: relative;
+    width: 100%;
+    height: 480px;
+    overflow: hidden;
+    background: #000;
+}
+
+.spotlight-backdrop {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center top;
+    filter: blur(28px) brightness(0.35);
+    transform: scale(1.08);
+    transition: background-image 0.8s ease;
+}
+
+.spotlight-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.7) 75%, #000 100%);
+    z-index: 1;
+}
+
+.spotlight-content {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 48px;
+    padding: 0 72px;
+}
+
+.spotlight-poster {
+    flex-shrink: 0;
+    width: 200px;
+    height: 300px;
+    border-radius: 12px;
+    object-fit: cover;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08);
+    transition: transform 0.4s ease;
+}
+.spotlight-poster:hover { transform: scale(1.03); }
+.spotlight-poster-placeholder {
+    flex-shrink: 0;
+    width: 200px;
+    height: 300px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.spotlight-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 560px;
+    animation: spotlightFadeIn 0.5s ease forwards;
+}
+
+.spotlight-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(243,156,18,0.15);
+    border: 1px solid rgba(243,156,18,0.4);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #f39c12;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    width: fit-content;
+}
+
+.spotlight-title {
+    font-size: 38px;
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -0.5px;
+    color: #fff;
+    text-shadow: 0 2px 20px rgba(0,0,0,0.6);
+}
+
+.spotlight-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.spotlight-chip {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.85);
+}
+.spotlight-chip.rating {
+    background: rgba(243,156,18,0.2);
+    border-color: rgba(243,156,18,0.5);
+    color: #f39c12;
+}
+
+.spotlight-overview {
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: rgba(255,255,255,0.7);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.spotlight-progress-bar {
+    height: 2px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+    overflow: hidden;
+    width: 100%;
+}
+.spotlight-progress-fill {
+    height: 100%;
+    background: #f39c12;
+    width: 0%;
+    transition: width 0.1s linear;
+}
+
+.spotlight-thumbnails {
+    position: absolute;
+    bottom: 20px;
+    right: 72px;
+    z-index: 3;
+    display: flex;
+    gap: 10px;
+}
+
+.spotlight-thumb {
+    width: 72px;
+    height: 44px;
+    border-radius: 6px;
+    object-fit: cover;
+    cursor: pointer;
+    opacity: 0.4;
+    border: 2px solid transparent;
+    transition: opacity 0.2s, border-color 0.2s, transform 0.2s;
+    background: rgba(255,255,255,0.05);
+}
+.spotlight-thumb:hover { opacity: 0.8; transform: scale(1.05); }
+.spotlight-thumb.active { opacity: 1; border-color: #f39c12; }
+
+.spotlight-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 4;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #fff;
+    transition: background 0.2s, transform 0.2s;
+    backdrop-filter: blur(8px);
+}
+.spotlight-arrow:hover { background: rgba(243,156,18,0.3); transform: translateY(-50%) scale(1.1); }
+.spotlight-arrow.prev { left: 24px; }
+.spotlight-arrow.next { right: 24px; }
+
+@keyframes spotlightFadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
