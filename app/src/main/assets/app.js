@@ -1200,6 +1200,14 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 200);
     }
 
+    // Atualiza a versão exibida na tela de login dinamicamente
+    const versionEl = document.querySelector('.version');
+    if (versionEl) {
+        if (window.AndroidApp && typeof window.AndroidApp.getAppVersion === 'function') {
+            versionEl.innerText = "Versão " + window.AndroidApp.getAppVersion();
+        }
+    }
+
     // Verifica atualizações ao abrir o app
     setTimeout(() => {
         if (window.AndroidApp && typeof window.AndroidApp.checkForUpdates === 'function') {

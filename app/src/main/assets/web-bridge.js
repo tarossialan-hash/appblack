@@ -354,6 +354,10 @@ class WebBridge {
             }
         }, 300);
     }
+
+    getAppVersion() {
+        return "1.0.0 (Web)";
+    }
 }
 
 // Injetar o WebBridge automaticamente se não estivermos no Android Nativo

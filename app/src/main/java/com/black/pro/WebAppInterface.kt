@@ -498,6 +498,16 @@ class WebAppInterface(
     }
 
     @JavascriptInterface
+    fun getAppVersion(): String {
+        return try {
+            val pInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
+            pInfo.versionName ?: "1.0.0"
+        } catch (e: Exception) {
+            "1.0.0"
+        }
+    }
+
+    @JavascriptInterface
     fun exitApp() {
         activity.runOnUiThread {
             activity.finishAndRemoveTask()
