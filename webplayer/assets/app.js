@@ -208,37 +208,25 @@ function mostrarCategoria(btn, cat) {
             window.AndroidApp.loadCategory('filmes');
             setTimeout(() => window.AndroidApp.loadCategory('series'), 500); 
         } else {
-            onBannerItemsLoaded(JSON.stringify([
-                {
-                    title: "O Conde de Monte Cristo",
-                    overview: "O jovem Edmond Dantès é alvo de uma trama sinistra e acaba sendo preso no dia de seu casamento. Após 14 anos, ele consegue fugir e assume a identidade do Conde de Monte Cristo para se vingar.",
-                    backdropUrl: "https://image.tmdb.org/t/p/original/9kcTsX2laYclN4bFiMH3RuhZel2.jpg",
-                    logoUrl: "https://placehold.co/400x120/transparent/white?text=Monte+Cristo",
-                    releaseYear: "2024", voteAverage: 8.5, ageRating: "14"
-                },
-                {
-                    title: "Avatar: O Caminho da Água",
-                    overview: "Jake Sully vive com sua nova família formada em Pandora. Uma vez que uma velha ameaça retorna para terminar o que foi iniciado anteriormente, Jake deve trabalhar com Neytiri e o exército da raça Na'vi para proteger seu planeta.",
-                    backdropUrl: "https://image.tmdb.org/t/p/original/s16H6tpK2utvwpaozVfFpv8mBT.jpg",
-                    logoUrl: "https://placehold.co/400x120/transparent/white?text=Avatar+2",
-                    releaseYear: "2022", voteAverage: 7.6, ageRating: "12"
-                },
-                {
-                    title: "Duna: Parte 2",
-                    overview: "Paul Atreides une-se a Chani e aos Fremen enquanto busca vingança contra os conspiradores que destruíram sua família. De frente com uma escolha entre o amor de sua vida e o destino do universo, ele tenta evitar um terrível futuro.",
-                    backdropUrl: "https://image.tmdb.org/t/p/original/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg",
-                    logoUrl: "https://placehold.co/400x120/transparent/white?text=Duna+2",
-                    releaseYear: "2024", voteAverage: 8.4, ageRating: "14"
-                },
-                {
-                    title: "Deadpool & Wolverine",
-                    overview: "Deadpool é recrutado por uma misteriosa agência para uma missão enquanto Wolverine ainda está descobrindo que a vida sem a Xavier School é mais complicada do que imaginava.",
-                    backdropUrl: "https://image.tmdb.org/t/p/original/nDvTTa0G4lLPnYHfqsGYlPDLzWl.jpg",
-                    logoUrl: "https://placehold.co/400x120/transparent/white?text=Deadpool",
-                    releaseYear: "2024", voteAverage: 7.8, ageRating: "16"
-                }
-            ]));
-            // Removido renderizarItens para movie-row e series-row
+            // Modo Web: busca filmes em cartaz reais da API TMDB via proxy
+            fetch('/api/tmdb/now-playing')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        onBannerItemsLoaded(JSON.stringify(data));
+                    } else {
+                        // Fallback se a API falhar
+                        onBannerItemsLoaded(JSON.stringify([
+                            { title: "Carregando...", overview: "Buscando filmes em cartaz...", backdropUrl: "", releaseYear: "", voteAverage: "", ageRating: "" }
+                        ]));
+                    }
+                })
+                .catch(() => {
+                    // Fallback offline
+                    onBannerItemsLoaded(JSON.stringify([
+                        { title: "Sem conexão", overview: "Não foi possível carregar os destaques.", backdropUrl: "", releaseYear: "", voteAverage: "", ageRating: "" }
+                    ]));
+                });
         }
     } else if (cat === 'tv') {
         document.querySelector('.home-scroll-area').style.display = 'none';
@@ -1025,12 +1013,18 @@ let currentInput = null;
 let isShift = false;
 let isNumbers = false;
 
-// Open Keyboard when clicking input
-document.getElementById('username').addEventListener('click', () => openKeyboard('username'));
-document.getElementById('password').addEventListener('click', () => openKeyboard('password'));
+// Open Keyboard when clicking input — only if login screen is visible
+document.getElementById('username').addEventListener('click', () => {
+    const loginScreen = document.getElementById('login-screen');
+    if (loginScreen && loginScreen.style.display !== 'none') openKeyboard('username');
+});
+document.getElementById('password').addEventListener('click', () => {
+    const loginScreen = document.getElementById('login-screen');
+    if (loginScreen && loginScreen.style.display !== 'none') openKeyboard('password');
+});
 // Para suportar navegação via Enter pelo D-PAD no input:
-document.getElementById('username').addEventListener('keydown', (e) => { if(e.key === 'Enter') openKeyboard('username'); });
-document.getElementById('password').addEventListener('keydown', (e) => { if(e.key === 'Enter') openKeyboard('password'); });
+document.getElementById('username').addEventListener('keydown', (e) => { if(e.key === 'Enter') { const ls = document.getElementById('login-screen'); if(ls && ls.style.display !== 'none') openKeyboard('username'); } });
+document.getElementById('password').addEventListener('keydown', (e) => { if(e.key === 'Enter') { const ls = document.getElementById('login-screen'); if(ls && ls.style.display !== 'none') openKeyboard('password'); } });
 
 // Garante que botões de ação respondam ao Enter do D-PAD/Controle Remoto
 document.addEventListener('keydown', function(e) {

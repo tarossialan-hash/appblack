@@ -24,6 +24,30 @@ const assetsPath = findAssetsPath();
 console.log(`📁 Servindo assets de: ${assetsPath}`);
 app.use(express.static(assetsPath));
 
+// Proxy TMDB — Filmes em Cartaz para o carrossel da Home
+const TMDB_API_KEY = process.env.TMDB_API_KEY || ''; // Defina como variável de ambiente no Render
+app.get('/api/tmdb/now-playing', async (req, res) => {
+    if (!TMDB_API_KEY) {
+        return res.json([]);
+    }
+    try {
+        const url = `https://api.themoviedb.org/3/movie/now_playing?api_key=${TMDB_API_KEY}&language=pt-BR&page=1`;
+        const response = await axios.get(url);
+        const movies = (response.data.results || []).slice(0, 6).map(m => ({
+            title: m.title,
+            overview: m.overview,
+            backdropUrl: m.backdrop_path ? `https://image.tmdb.org/t/p/original${m.backdrop_path}` : '',
+            releaseYear: m.release_date ? m.release_date.substring(0, 4) : '',
+            voteAverage: m.vote_average ? m.vote_average.toFixed(1) : '',
+            ageRating: ''
+        }));
+        res.json(movies);
+    } catch (err) {
+        console.error('TMDB Error:', err.message);
+        res.json([]);
+    }
+});
+
 // Proxy para a API JSON do Xtream
 app.post('/api/xtream', async (req, res) => {
     const { serverUrl, username, password, action, extraParams } = req.body;
