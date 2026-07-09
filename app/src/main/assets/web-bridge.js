@@ -332,10 +332,12 @@ class WebBridge {
 
     checkForUpdates() {
         console.log("🌐 WebBridge: Simulando checagem de atualizações...");
-        if (this.simulatedVersion.includes("1.0.0")) {
+        // Mostra update se versão for menor que 1.0.2
+        const needsUpdate = this.simulatedVersion.includes("1.0.0") || this.simulatedVersion.includes("1.0.1");
+        if (needsUpdate) {
             setTimeout(() => {
                 if (typeof showUpdateModal === 'function') {
-                    showUpdateModal('1.0.1', 'https://raw.githubusercontent.com/tarossialan-hash/appblack/main/app-release.apk');
+                    showUpdateModal('1.0.2', 'https://raw.githubusercontent.com/tarossialan-hash/appblack/main/app-release.apk');
                 }
             }, 1500);
         }
@@ -353,7 +355,7 @@ class WebBridge {
                 clearInterval(interval);
                 setTimeout(() => {
                     // Salva a versão simulada no localStorage para persistir nos reloads!
-                    localStorage.setItem('wb_simulated_version', '1.0.1 (Web)');
+                    localStorage.setItem('wb_simulated_version', '1.0.2 (Web)');
                     
                     // Fecha o modal de atualização
                     if (typeof fecharUpdateModal === 'function') {
