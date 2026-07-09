@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280, user-scalable=no">
+    <title>BLACK App - Layout Customizável</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // Anti-FOUC (Flash of Unstyled Content): previne que a tela de login pisque no F5 se o usuário já estiver logado
+        if (localStorage.getItem('logged_in_user')) {
+            document.write('<style>#login-screen { display: none !important; } #home-screen { display: block !important; }</style>');
+        }
+    </script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/ldrs/dist/auto/spiral.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        
+        <!-- Tela de Login (Mesma que ajustamos anteriormente) -->
+        <div id="login-screen" class="screen">
+            <div class="login-left">
+                <img src="logo_black.png" alt="BLACK" class="logo">
+                
+                <h1 class="main-title">
+                    Aplicativo de reprodução para TVs.<br>
+                    Use suas próprias listas e fontes legais.
+                </h1>
+                
+                <ul class="info-list">
+                    <li>• Não fornecemos, hospedamos ou agregamos conteúdo.</li>
+                    <li>• Use apenas mídia que você tem permissão legal para acessar.</li>
+                    <li>• Navegação: setas para mover, OK para selecionar, Voltar para retornar.</li>
+                </ul>
+                
+                <p class="terms-text">Ao continuar, você concorda com os Termos de Uso...</p>
+                
+                <button class="demo-button" onclick="document.getElementById('username').value='demo'; document.getElementById('password').value='demo';">Demo</button>
+            </div>
+
+            <div class="login-right">
+                <div class="login-box">
+                    <div class="input-group">
+                        <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
+                        <input type="text" id="username" placeholder="Usuário" readonly tabindex="0" />
+                    </div>
+                    
+                    <div class="input-group">
+                        <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+                        <input type="password" id="password" placeholder="Senha" readonly tabindex="0" />
+                        <button class="toggle-password-btn" type="button" onclick="togglePasswordVisibility()" tabindex="0">
+                            <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                    
+                    <button class="btn-entrar" onclick="fazerLogin()">ENTRAR</button>
+                    
+                    <div id="login-status"></div>
+                    
+                    <div class="tv-controls-hint">
+                        <span class="hint-item"><span class="key">OK</span> edit</span>
+                        <span class="hint-item"><span class="key">↵</span> enter</span>
+                        <span class="hint-item"><span class="key">←</span> back</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="version">Versão 1.0.0</div>
+        </div>
+
+        <!-- Tela de Sincronização -->
+        <div id="sync-screen" class="screen" style="display: none;">
+            <div class="sync-content">
+                <l-spiral size="60" speed="0.9" color="#f39c12"></l-spiral>
+                <h2 id="sync-status-text">Sincronizando canais...</h2>
+                <div class="sync-progress-bar"><div class="sync-progress-fill" id="sync-progress"></div></div>
+            </div>
+        </div>
+
+        <!-- Tela Home (Estilo Nativo BLACK TV) -->
+        <div id="home-screen" class="screen" style="display: none;">
+            
+            <!-- Barra de Navegação Superior -->
+            <header class="top-nav">
+                <div class="nav-left">
+                    <img src="logo_black.png" alt="BLACK" class="nav-logo">
+                    <button class="nav-item active" onclick="mostrarCategoria(this, 'inicio')">Início</button>
+                    <button class="nav-item" onclick="mostrarCategoria(this, 'tv')">TV ao vivo</button>
+                    <button class="nav-item" onclick="mostrarCategoria(this, 'filmes')">Filmes</button>
+                    <button class="nav-item" onclick="mostrarCategoria(this, 'series')">Séries</button>
+                </div>
+                <div class="nav-right">
+                    <button class="action-btn" onclick="buscar()">
+                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </button>
+                    <button class="action-btn" onclick="recarregar()">
+                        <svg class="icon" style="stroke: #f39c12;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    </button>
+                    <div class="divider"></div>
+                    <button class="action-btn" onclick="sair()">
+                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Área de Conteúdo com Scroll -->
+            <div class="home-scroll-area">
+                
+                <!-- Banner Herói Dinâmico -->
+                <div id="dynamic-hero-banner"></div>
+
+                <!-- Carrossel: Últimos Adicionados (TMDB) -->
+                <div class="home-section" id="home-latest-section" style="display:none;">
+                    <div class="home-section-title">🎬 Últimos Adicionados</div>
+                    <div class="tmdb-carousel-track" id="tmdb-latest-track"></div>
+                </div>
+
+
+
+                <!-- Botão Explorar -->
+                <div class="explore-btn-container" style="display:none; justify-content:center; padding: 20px 40px 40px;">
+                    <button class="btn-watch" onclick="mostrarCategoria(document.querySelector('.nav-item:nth-child(3)'), 'filmes')" style="padding:14px 40px; font-size:15px;">
+                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        Explorar catálogo completo
+                    </button>
+                </div>
+
+        </div>
+        
+        <!-- Tela de TV ao Vivo (Layout 3 colunas) -->
+        <div id="live-tv-screen" class="live-tv-layout" style="display: none;">
+            <div class="live-col-categories">
+                <!-- Categorias injetadas aqui -->
+            </div>
+            
+            <div class="live-col-channels">
+                <!-- Canais da categoria injetados aqui -->
+            </div>
+            
+            <div class="live-col-preview">
+                <div class="live-player-container">
+                    <img id="preview-poster" class="premium-video-player" style="display: none;" src="" alt="Poster" />
+                    <video id="live-player" class="premium-video-player" playsinline autoplay poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
+                    <div class="live-player-placeholder" id="live-player-overlay">
+                        <!-- Tela de player inicial / Info -->
+                        <l-spiral id="live-player-loader" size="60" speed="0.9" color="#f39c12" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100;"></l-spiral>
+                        <div id="live-player-title" style="position: absolute; bottom: 20px; left: 20px; text-shadow: 0 2px 4px rgba(0,0,0,0.8); z-index: 2;">Selecione um item para assistir</div>
+                    </div>
+                </div>
+                <div class="live-epg-container">
+                    <h3 class="epg-title" id="preview-info-title">Programação</h3>
+                    <div class="epg-list" id="live-epg-list">
+                        <!-- EPG ou Sinopse injetados aqui -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tela de Filmes e Séries (Layout 2 colunas: Categorias + Grade) -->
+        <div id="vod-tv-screen" class="live-tv-layout" style="display: none;">
+            <div class="live-col-categories" id="vod-categories-list">
+                <!-- Categorias injetadas aqui -->
+            </div>
+            <div class="vod-col-grid" id="vod-items-grid">
+                <!-- Grade de capas injetada aqui -->
+            </div>
+        </div>
+        
+        <!-- Tela de Busca (Estilo Anexo 2) -->
+        <div id="search-tv-screen" class="search-layout" style="display: none;">
+            <!-- Painel Esquerdo: Teclado Virtual + Campo de Busca -->
+            <div class="search-left-panel">
+                <div class="search-input-wrapper">
+                    <svg class="search-input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" id="search-input-field" placeholder="Buscar..." readonly />
+                </div>
+                
+                <div class="search-keyboard" id="search-virtual-keyboard">
+                    <div class="sk-row">
+                        <button class="sk-key" tabindex="0">a</button>
+                        <button class="sk-key" tabindex="0">b</button>
+                        <button class="sk-key" tabindex="0">c</button>
+                        <button class="sk-key" tabindex="0">d</button>
+                        <button class="sk-key" tabindex="0">e</button>
+                        <button class="sk-key" tabindex="0">f</button>
+                    </div>
+                    <div class="sk-row">
+                        <button class="sk-key" tabindex="0">g</button>
+                        <button class="sk-key" tabindex="0">h</button>
+                        <button class="sk-key" tabindex="0">i</button>
+                        <button class="sk-key" tabindex="0">j</button>
+                        <button class="sk-key" tabindex="0">k</button>
+                        <button class="sk-key" tabindex="0">l</button>
+                    </div>
+                    <div class="sk-row">
+                        <button class="sk-key" tabindex="0">m</button>
+                        <button class="sk-key" tabindex="0">n</button>
+                        <button class="sk-key" tabindex="0">o</button>
+                        <button class="sk-key" tabindex="0">p</button>
+                        <button class="sk-key" tabindex="0">q</button>
+                        <button class="sk-key" tabindex="0">r</button>
+                    </div>
+                    <div class="sk-row">
+                        <button class="sk-key" tabindex="0">s</button>
+                        <button class="sk-key" tabindex="0">t</button>
+                        <button class="sk-key" tabindex="0">u</button>
+                        <button class="sk-key" tabindex="0">v</button>
+                        <button class="sk-key" tabindex="0">w</button>
+                        <button class="sk-key" tabindex="0">x</button>
+                    </div>
+                    <div class="sk-row">
+                        <button class="sk-key" tabindex="0">y</button>
+                        <button class="sk-key" tabindex="0">z</button>
+                        <button class="sk-key" tabindex="0">ç</button>
+                        <button class="sk-key" tabindex="0">1</button>
+                        <button class="sk-key" tabindex="0">2</button>
+                        <button class="sk-key" tabindex="0">3</button>
+                    </div>
+                    <div class="sk-row">
+                        <button class="sk-key" tabindex="0">4</button>
+                        <button class="sk-key" tabindex="0">5</button>
+                        <button class="sk-key" tabindex="0">6</button>
+                        <button class="sk-key" tabindex="0">7</button>
+                        <button class="sk-key" tabindex="0">8</button>
+                        <button class="sk-key" tabindex="0">9</button>
+                    </div>
+                    <div class="sk-row">
+                        <button class="sk-key" tabindex="0">0</button>
+                    </div>
+                    <div class="sk-row action-row">
+                        <button class="sk-key sk-action" tabindex="0" data-val="BACKSPACE">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM18 9l-6 6M12 9l6 6"/></svg>
+                        </button>
+                        <button class="sk-key sk-action" tabindex="0" data-val="CLEAR">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                        <button class="sk-key sk-space" tabindex="0" data-val=" ">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v3H4v-3"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Painel Direito: Resultados da Busca -->
+            <div class="search-right-panel">
+                <div class="search-placeholder" id="search-results-placeholder">
+                    Digite para pesquisar conteúdos.
+                </div>
+                <div id="search-results-container" style="display: none; width: 100%;">
+                    <!-- Seção de Filmes -->
+                    <div class="search-section" id="search-movies-section" style="display: none;">
+                        <h2 class="search-section-title">FILMES</h2>
+                        <div class="vod-col-grid" id="search-movies-grid">
+                            <!-- Filmes injetados aqui -->
+                        </div>
+                    </div>
+                    
+                    <!-- Seção de Séries -->
+                    <div class="search-section" id="search-series-section" style="display: none; margin-top: 40px;">
+                        <h2 class="search-section-title">SÉRIES</h2>
+                        <div class="vod-col-grid" id="search-series-grid">
+                            <!-- Séries injetadas aqui -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Modal Elegante de Detalhes VOD -->
+    <div id="vod-details-modal" class="vod-modal" style="display: none;">
+        <l-spiral id="vod-modal-loader" size="60" speed="0.9" color="#f39c12" style="display: block; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100;"></l-spiral>
+        <div class="vod-modal-content" id="vod-modal-content" style="opacity: 0; transition: opacity 0.5s ease;">
+            <div class="vod-modal-bg" id="vod-modal-bg"></div>
+            <div class="vod-modal-gradient"></div>
+            <div class="vod-modal-info">
+                <img id="vod-modal-poster" src="" alt="Poster" class="vod-modal-poster-img">
+                <div class="vod-modal-text">
+                    <img id="vod-modal-logo" src="" alt="Logo" class="vod-modal-logo-img" style="display: none; max-width: 350px; max-height: 150px; object-fit: contain; margin-bottom: 20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));">
+                    <h2 id="vod-modal-title">Título do Filme</h2>
+                    <div class="vod-modal-meta">
+                        <span id="vod-modal-rating" class="meta-tag">⭐ 8.5</span>
+                        <span id="vod-modal-year" class="meta-tag">2024</span>
+                    </div>
+                    <p id="vod-modal-synopsis" class="vod-modal-desc">Carregando sinopse...</p>
+                    <div class="vod-modal-actions">
+                        <button id="vod-btn-play" class="vod-btn primary" tabindex="0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            Assistir
+                        </button>
+                        <button id="vod-btn-close" class="vod-btn secondary" tabindex="0">Voltar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação de Saída -->
+    <div id="exit-confirm-modal" class="vod-modal" style="display: none;">
+        <div class="exit-modal-content">
+            <h3 class="exit-modal-title">Deseja realmente sair do aplicativo?</h3>
+            <div class="exit-modal-buttons">
+                <button id="exit-btn-yes" class="vod-btn primary" onclick="confirmarSaida()" tabindex="0">Sim</button>
+                <button id="exit-btn-no" class="vod-btn secondary" onclick="fecharExitModal()" tabindex="0">Não</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Atualização -->
+    <div id="update-confirm-modal" class="vod-modal" style="display: none;">
+        <div class="exit-modal-content">
+            <h3 class="exit-modal-title">Nova versão disponível! (<span id="update-version-name">1.0.1</span>)</h3>
+            <p style="color: #bbb; font-size: 14px; margin: -10px 0 10px 0;">Deseja atualizar o aplicativo para a nova versão?</p>
+            <div id="update-modal-buttons" class="exit-modal-buttons">
+                <button id="update-btn-yes" class="vod-btn primary" onclick="iniciarAtualizacao()" tabindex="0">Atualizar</button>
+                <button id="update-btn-no" class="vod-btn secondary" onclick="fecharUpdateModal()" tabindex="0">Depois</button>
+            </div>
+            <div id="update-progress-container" style="display: none; flex-direction: column; gap: 8px; width: 100%;">
+                <div style="display: flex; justify-content: space-between; color: #fff; font-size: 14px;">
+                    <span>Baixando atualização...</span>
+                    <span id="update-progress-text">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: #333; border-radius: 4px; overflow: hidden;">
+                    <div id="update-progress-bar" style="width: 0%; height: 100%; background: #f39c12; transition: width 0.1s ease;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    
+    <!-- Teclado Virtual (OSK) -->
+    <div id="virtual-keyboard" class="vk-container" style="display: none;">
+        <div class="vk-row" id="vk-row-0">
+            <button class="vk-key" tabindex="0">q</button><button class="vk-key" tabindex="0">w</button><button class="vk-key" tabindex="0">e</button><button class="vk-key" tabindex="0">r</button><button class="vk-key" tabindex="0">t</button><button class="vk-key" tabindex="0">y</button><button class="vk-key" tabindex="0">u</button><button class="vk-key" tabindex="0">i</button><button class="vk-key" tabindex="0">o</button><button class="vk-key" tabindex="0">p</button>
+        </div>
+        <div class="vk-row" id="vk-row-1">
+            <button class="vk-key" tabindex="0">a</button><button class="vk-key" tabindex="0">s</button><button class="vk-key" tabindex="0">d</button><button class="vk-key" tabindex="0">f</button><button class="vk-key" tabindex="0">g</button><button class="vk-key" tabindex="0">h</button><button class="vk-key" tabindex="0">j</button><button class="vk-key" tabindex="0">k</button><button class="vk-key" tabindex="0">l</button><button class="vk-key" tabindex="0">/</button>
+        </div>
+        <div class="vk-row" id="vk-row-2">
+            <button class="vk-key" tabindex="0">z</button><button class="vk-key" tabindex="0">x</button><button class="vk-key" tabindex="0">c</button><button class="vk-key" tabindex="0">v</button><button class="vk-key" tabindex="0">b</button><button class="vk-key" tabindex="0">n</button><button class="vk-key" tabindex="0">m</button><button class="vk-key" tabindex="0">?</button><button class="vk-key" tabindex="0">\</button>
+        </div>
+        <div class="vk-row" id="vk-row-3">
+            <button class="vk-key vk-action" tabindex="0" data-val="123">123</button>
+            <button class="vk-key vk-action" tabindex="0" data-val="SHIFT">⬆</button>
+            <button class="vk-key vk-action" tabindex="0" data-val="BACKSPACE">⌫</button>
+            <button class="vk-key vk-space" tabindex="0" data-val=" ">Espaço</button>
+            <button class="vk-key vk-clear" tabindex="0" data-val="CLEAR">Limpar</button>
+            <button class="vk-key vk-submit" tabindex="0" data-val="SUBMIT">✓</button>
+        </div>
+    </div>
+    
+    <div id="fs-player-container" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 99999; background: black;">
+        <video id="fullscreen-player" class="premium-video-player" playsinline style="width: 100%; height: 100%;"></video>
+        <div id="fs-ui" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.8) 100%); transition: opacity 0.3s; opacity: 1;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 40px 40px 20px 40px;">
+                <div id="fs-btn-back" tabindex="0" class="fs-control-btn" style="cursor: pointer; color: white; z-index: 2;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                </div>
+            </div>
+
+            <div style="padding: 20px 40px; display: flex; flex-direction: column; gap: 15px;">
+                
+                <!-- Logo acima dos controles do player -->
+                <div style="display: flex; justify-content: flex-start; margin-bottom: 60px; pointer-events: none;">
+                    <img id="fs-logo" src="" style="height: 180px; max-width: 550px; object-fit: contain; display: none; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.8));" />
+                    <div id="fs-title" style="color: white; font-size: 34px; font-weight: bold; font-family: 'Inter', sans-serif; display: none; text-shadow: 0 2px 8px rgba(0,0,0,0.8);"></div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 25px; color: white; font-family: 'Inter', sans-serif;">
+                    
+                    <div id="fs-btn-rewind" tabindex="0" class="fs-control-btn" style="cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6,13 c0,3.31,2.69,6,6,6s6-2.69,6-6s-2.69-6-6-6v4l-5-5l5-5v4c4.42,0,8,3.58,8,8c0,4.42-3.58,8-8,8s-8-3.58-8-8H6z"/>
+                            <text x="12" y="16" font-size="7" font-weight="bold" font-family="sans-serif" text-anchor="middle">10</text>
+                        </svg>
+                    </div>
+
+                    <div id="fs-btn-play" tabindex="0" class="fs-control-btn" style="cursor: pointer;">
+                        <svg id="fs-icon-play" style="display: none;" width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        <svg id="fs-icon-pause" width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    </div>
+                    
+                    <div id="fs-btn-forward" tabindex="0" class="fs-control-btn" style="cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M18,13 c0,3.31-2.69,6-6,6s-6-2.69-6-6s2.69-6,6-6v4l5-5l-5-5v4c-4.42,0-8,3.58-8,8c0,4.42,3.58,8,8,8s8-3.58,8-8H18z"/>
+                            <text x="12" y="16" font-size="7" font-weight="bold" font-family="sans-serif" text-anchor="middle">10</text>
+                        </svg>
+                    </div>
+                    
+                    <div id="fs-time-current" style="font-size: 14px; font-variant-numeric: tabular-nums;">00:00:00</div>
+                    
+                    <input type="range" id="fs-progress" value="0" min="0" max="100" step="0.1" style="flex-grow: 1; cursor: pointer; accent-color: #f39c12;" />
+                    
+                    <div id="fs-time-total" style="font-size: 14px; font-variant-numeric: tabular-nums;">-00:00:00</div>
+                    
+                    <div id="fs-btn-fullscreen" tabindex="0" class="fs-control-btn" style="cursor: pointer;">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
+    <script src="web-bridge.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
