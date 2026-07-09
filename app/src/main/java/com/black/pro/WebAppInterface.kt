@@ -445,21 +445,55 @@ class WebAppInterface(
     }
 
     private fun installApk(file: File) {
-        try {
-            val context = activity.applicationContext
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                val uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    file
-                )
-                setDataAndType(uri, "application/vnd.android.package-archive")
+        CoroutineScope(Dispatchers.IO).launch {
+            // 1. Tenta a instalação silenciosa via ROOT
+            val success = installSilentWithRoot(file)
+            
+            // 2. Se falhar (dispositivo sem root), abre a instalação padrão do Android
+            if (!success) {
+                withContext(Dispatchers.Main) {
+                    try {
+                        val context = activity.applicationContext
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            val uri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                file
+                            )
+                            setDataAndType(uri, "application/vnd.android.package-archive")
+                        }
+                        activity.startActivity(intent)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
             }
-            activity.startActivity(intent)
+        }
+    }
+
+    private fun installSilentWithRoot(file: File): Boolean {
+        var process: Process? = null
+        var os: java.io.DataOutputStream? = null
+        return try {
+            process = Runtime.getRuntime().exec("su")
+            os = java.io.DataOutputStream(process.outputStream)
+            
+            // pm install -r -d: reinstalar, manter dados e permitir downgrade
+            os.writeBytes("pm install -r -d ${file.absolutePath}\n")
+            os.writeBytes("exit\n")
+            os.flush()
+            
+            val exitVal = process.waitFor()
+            exitVal == 0
         } catch (e: Exception) {
-            e.printStackTrace()
+            false
+        } finally {
+            try {
+                os?.close()
+                process?.destroy()
+            } catch (e: Exception) {}
         }
     }
 
