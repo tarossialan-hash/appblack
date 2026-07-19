@@ -85,49 +85,58 @@
 
         <!-- Tela Home (Estilo Nativo BLACK TV) -->
         <div id="home-screen" class="screen" style="display: none;">
-            
-            <!-- Barra de Navegação Superior -->
-            <header class="top-nav">
-                <div class="nav-left">
-                    <img src="logo_black.png" alt="BLACK" class="nav-logo">
-                    <button class="nav-item active" onclick="mostrarCategoria(this, 'inicio')">Início</button>
-                    <button class="nav-item" onclick="mostrarCategoria(this, 'tv')">TV ao vivo</button>
-                    <button class="nav-item" onclick="mostrarCategoria(this, 'filmes')">Filmes</button>
-                    <button class="nav-item" onclick="mostrarCategoria(this, 'series')">Séries</button>
-                </div>
-                <div class="nav-right">
-                    <button id="nav-update-btn" class="action-btn" onclick="abrirUpdateConfirmModalDirectly()" style="display: none; color: #f39c12; font-weight: bold; font-size: 13px; gap: 6px; padding: 0 16px; border: 1px solid #f39c12; border-radius: 20px; background: rgba(243, 156, 18, 0.1); align-items: center; justify-content: center; margin-right: 12px; width: auto; height: 36px;" tabindex="0">
-                        <span style="width: 8px; height: 8px; background-color: #f39c12; border-radius: 50%; display: inline-block;"></span>
-                        Atualizar App
-                    </button>
-                    <button class="action-btn" onclick="buscar()">
-                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                    </button>
-                    <button class="action-btn" onclick="recarregar()">
-                        <svg class="icon" style="stroke: #f39c12;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                    </button>
-                    <div class="divider"></div>
-                    <button class="action-btn" onclick="sair()">
-                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                    </button>
-                </div>
-            </header>
-
             <!-- Área de Conteúdo com Scroll -->
             <div class="home-scroll-area">
                 
+                <!-- Barra de Navegação Superior -->
+                <header class="top-nav">
+                    <div class="nav-left">
+                        <img src="logo_black.png" alt="BLACK" class="nav-logo">
+                        <button class="nav-item active" onclick="mostrarCategoria(this, 'inicio')">Início</button>
+                        <button class="nav-item" onclick="mostrarCategoria(this, 'tv')">TV ao vivo</button>
+                        <button class="nav-item" onclick="mostrarCategoria(this, 'filmes')">Filmes</button>
+                        <button class="nav-item" onclick="mostrarCategoria(this, 'series')">Séries</button>
+                    </div>
+                    <div class="nav-right">
+                        <button id="nav-update-btn" class="action-btn" onclick="abrirUpdateConfirmModalDirectly()" style="display: none; color: #f39c12; font-weight: bold; font-size: 13px; gap: 6px; padding: 0 16px; border: 1px solid #f39c12; border-radius: 20px; background: rgba(243, 156, 18, 0.1); align-items: center; justify-content: center; margin-right: 12px; width: auto; height: 32px;" tabindex="0">
+                            <span style="width: 8px; height: 8px; background-color: #f39c12; border-radius: 50%; display: inline-block;"></span>
+                            Atualizar App
+                        </button>
+                        <button class="action-btn" onclick="buscar()">
+                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        </button>
+                        <button class="action-btn" onclick="recarregar()">
+                            <svg class="icon" style="stroke: #f39c12;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        </button>
+                        <div class="divider"></div>
+                        <button class="action-btn" onclick="sair()">
+                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                        </button>
+                    </div>
+                </header>
+
                 <!-- Banner Herói Dinâmico -->
                 <div id="dynamic-hero-banner"></div>
 
-                <!-- Botão Explorar -->
-                <div class="explore-btn-container" style="display:none; justify-content:center; padding: 20px 40px 40px;">
-                    <button class="btn-watch" onclick="mostrarCategoria(document.querySelector('.nav-item:nth-child(3)'), 'filmes')" style="padding:14px 40px; font-size:15px;">
-                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                        Explorar catálogo completo
-                    </button>
+                <!-- Seção de Novos Filmes -->
+                <div class="home-section" id="home-movies-section" style="display: none;">
+                    <div class="home-section-title">
+                        <svg class="section-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f39c12" stroke-width="2.5"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+                        Novos Filmes
+                    </div>
+                    <div class="home-row" id="movie-row"></div>
                 </div>
 
-        </div>
+                <!-- Seção de Novas Séries -->
+                <div class="home-section" id="home-series-section" style="display: none;">
+                    <div class="home-section-title">
+                        <svg class="section-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f39c12" stroke-width="2.5"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>
+                        Novas Séries
+                    </div>
+                    <div class="home-row" id="series-row"></div>
+                </div>
+
+            </div>
         
         <!-- Tela de TV ao Vivo (Layout 3 colunas) -->
         <div id="live-tv-screen" class="live-tv-layout" style="display: none;">
@@ -172,6 +181,12 @@
         <div id="search-tv-screen" class="search-layout" style="display: none;">
             <!-- Painel Esquerdo: Teclado Virtual + Campo de Busca -->
             <div class="search-left-panel">
+                <div class="search-header">
+                    <button class="search-back-round-btn" onclick="fecharBusca()" tabindex="0" title="Voltar">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <span class="search-header-title">Pesquisar</span>
+                </div>
                 <div class="search-input-wrapper">
                     <svg class="search-input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     <input type="text" id="search-input-field" placeholder="Buscar..." readonly />
@@ -270,33 +285,94 @@
         
     </div>
 
-    <!-- Modal Elegante de Detalhes VOD -->
-    <div id="vod-details-modal" class="vod-modal" style="display: none;">
-        <l-spiral id="vod-modal-loader" size="60" speed="0.9" color="#f39c12" style="display: block; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100;"></l-spiral>
-        <div class="vod-modal-content" id="vod-modal-content" style="opacity: 0; transition: opacity 0.5s ease;">
-            <div class="vod-modal-bg" id="vod-modal-bg"></div>
-            <div class="vod-modal-gradient"></div>
-            <div class="vod-modal-info">
-                <img id="vod-modal-poster" src="" alt="Poster" class="vod-modal-poster-img">
-                <div class="vod-modal-text">
-                    <img id="vod-modal-logo" src="" alt="Logo" class="vod-modal-logo-img" style="display: none; max-width: 350px; max-height: 150px; object-fit: contain; margin-bottom: 20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));">
-                    <h2 id="vod-modal-title">Título do Filme</h2>
-                    <div class="vod-modal-meta">
-                        <span id="vod-modal-rating" class="meta-tag">⭐ 8.5</span>
-                        <span id="vod-modal-year" class="meta-tag">2024</span>
-                    </div>
-                    <p id="vod-modal-synopsis" class="vod-modal-desc">Carregando sinopse...</p>
-                    <div class="vod-modal-actions">
-                        <button id="vod-btn-play" class="vod-btn primary" tabindex="0">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                            Assistir
+    <!-- Tela de Detalhes VOD (substitui o popup) -->
+    <div id="vod-detail-screen" style="display:none; position:fixed; inset:0; z-index:9000; background:#000; overflow-y:auto; flex-direction:column;">
+
+        <!-- Botão Voltar Redondo Premium no canto superior esquerdo -->
+        <button id="vod-detail-screen-back-btn" class="search-back-round-btn" style="position: absolute; top: 40px; left: 40px; z-index: 10000;" tabindex="0" title="Voltar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        </button>
+
+        <!-- Hero: Backdrop + Gradientes + Info -->
+        <div id="vod-detail-hero" style="position:relative; width:100%; height:400px; overflow:hidden; flex-shrink:0;">
+            <!-- Backdrop posicionado mais à direita (90%) -->
+            <div id="vod-detail-backdrop" style="position:absolute;inset:0;background-size:cover;background-position:90% center;filter:brightness(0.75);"></div>
+            <!-- Gradiente lateral: escurece a esquerda onde fica o texto -->
+            <div style="position:absolute;inset:0;background:linear-gradient(to right, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.75) 45%, rgba(0,0,0,0.0) 100%);z-index:1;"></div>
+            <!-- Gradiente inferior: funde com o preto abaixo -->
+            <div style="position:absolute;bottom:0;left:0;width:100%;height:140px;background:linear-gradient(to top,#000 0%,transparent 100%);z-index:2;"></div>
+
+            <!-- Conteúdo: poster + info — alinhados ao TOPO com 20px de padding, deixando margem para o botão Voltar -->
+            <div style="position:absolute;inset:0;z-index:3;display:flex;align-items:flex-start;gap:32px;padding:40px 40px 0 110px;">
+                <!-- Poster -->
+                <img id="vod-detail-poster" src="" alt="Poster"
+                     style="width:160px;height:240px;object-fit:cover;object-position:center top;border-radius:10px;flex-shrink:0;box-shadow:0 12px 40px rgba(0,0,0,0.9);border:1px solid rgba(255,255,255,0.1);">
+
+                <!-- Info texto — alinhada ao topo com padding-top 0 para alinhar perfeitamente com a capa -->
+                <div style="flex:1;display:flex;flex-direction:column;gap:10px;max-width:580px;padding-top:0;">
+                    <!-- Logo ou Título -->
+                    <img id="vod-detail-logo" src="" alt="Logo"
+                         style="display:none;max-width:300px;max-height:110px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.9));">
+                    <h1 id="vod-detail-title" style="margin:0;font-size:36px;font-weight:900;color:#fff;line-height:1.1;font-family:'Inter',sans-serif;text-shadow:0 2px 8px rgba(0,0,0,0.8);"></h1>
+                    <!-- Título original pequeno -->
+                    <p id="vod-detail-original" style="margin:0;font-size:13px;color:rgba(255,255,255,0.5);font-family:'Inter',sans-serif;"></p>
+                    <!-- Botões: Apenas Assistir e Favoritar (como no anexo) -->
+                    <div style="display:flex;gap:12px;margin-top:6px;">
+                        <button id="vod-detail-btn-play" class="vod-btn primary" tabindex="0" style="padding:12px 28px;font-size:15px;gap:8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            ASSISTIR
                         </button>
-                        <button id="vod-btn-close" class="vod-btn secondary" tabindex="0">Voltar</button>
+                        <button id="vod-detail-btn-fav" class="vod-btn secondary" tabindex="0" style="padding:12px 22px;font-size:15px;gap:8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                            Favoritar
+                        </button>
+                    </div>
+                    <!-- Metadata row -->
+                    <div id="vod-detail-meta" style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-family:'Inter',sans-serif;font-size:13px;color:rgba(255,255,255,0.65);">
+                        <span id="vod-detail-date" style="display:flex;align-items:center;gap:5px;"></span>
+                        <span id="vod-detail-genre" style="display:flex;align-items:center;gap:5px;"></span>
+                        <span id="vod-detail-runtime" style="display:flex;align-items:center;gap:5px;"></span>
                     </div>
                 </div>
             </div>
+
+            <!-- Loader centralizado -->
+            <l-spiral id="vod-detail-loader" size="55" speed="0.9" color="#f39c12"
+                style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;display:block;"></l-spiral>
+        </div>
+
+        <!-- Sinopse + Créditos (abaixo do hero) -->
+        <div style="padding:20px 40px 24px;max-width:760px;display:flex;flex-direction:column;gap:14px;margin-left:70px;">
+            <!-- Caixa de Sinopse Estilizada (como no anexo) -->
+            <div id="vod-detail-overview-box" style="display:flex;gap:16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px 20px;align-items:flex-start;max-height:140px;overflow-y:auto;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+                <p id="vod-detail-overview" style="font-size:14px;line-height:1.6;color:#ccc;font-family:'Inter',sans-serif;margin:0;"></p>
+            </div>
+            <!-- Diretor / Elenco -->
+            <div id="vod-detail-credits" style="font-size:13px;color:rgba(255,255,255,0.55);font-family:'Inter',sans-serif;line-height:1.8;display:none;padding-top:4px;">
+                <div id="vod-detail-director"></div>
+                <div id="vod-detail-cast"></div>
+            </div>
+        </div>
+
+        <!-- Seção: Temporadas e Episódios (apenas para Séries) -->
+        <div id="vod-detail-series-section" style="padding:0 40px 48px; display:none; margin-left:70px;">
+            <!-- Abas de Temporadas -->
+            <div id="vod-detail-seasons-tabs" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:14px;scrollbar-width:none;margin-bottom:20px;"></div>
+            <!-- Título da Temporada Ativa -->
+            <h3 id="vod-detail-season-title" style="font-size:16px;font-weight:700;color:#fff;margin:0 0-4px 0;font-family:'Inter',sans-serif;text-transform:uppercase;">TEMPORADA 1</h3>
+            <!-- Lista de Episódios -->
+            <div id="vod-detail-episodes-row" class="home-row" style="display:flex;gap:16px;overflow-x:auto;padding-bottom:16px;scrollbar-width:none;"></div>
+        </div>
+
+        <!-- Seção: Recentemente Adicionados — cards iguais à home (190x285px, .vod-item) (apenas para Filmes) -->
+        <div id="vod-detail-related-section" style="padding:0 40px 48px;display:none; margin-left:70px;">
+            <h3 style="font-size:13px;font-weight:700;letter-spacing:2px;color:#f39c12;text-transform:uppercase;margin:0 0 16px 0;font-family:'Inter',sans-serif;">Recentemente Adicionados</h3>
+            <div id="vod-detail-related-row" class="home-row" style="display:flex;gap:14px;overflow-x:auto;padding-bottom:16px;"></div>
         </div>
     </div>
+
+
 
     <!-- Modal de Confirmação de Saída -->
     <div id="exit-confirm-modal" class="vod-modal" style="display: none;">
@@ -370,7 +446,7 @@
                     <div id="fs-title" style="color: white; font-size: 34px; font-weight: bold; font-family: 'Inter', sans-serif; display: none; text-shadow: 0 2px 8px rgba(0,0,0,0.8);"></div>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 25px; color: white; font-family: 'Inter', sans-serif;">
+                <div id="fs-controls-row" style="display: flex; align-items: center; gap: 25px; color: white; font-family: 'Inter', sans-serif;">
                     
                     <div id="fs-btn-rewind" tabindex="0" class="fs-control-btn" style="cursor: pointer; display: flex; align-items: center; justify-content: center;">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">

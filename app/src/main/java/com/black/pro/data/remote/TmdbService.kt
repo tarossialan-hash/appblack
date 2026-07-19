@@ -23,14 +23,14 @@ interface TmdbService {
     suspend fun getMovieImages(
         @Path("movie_id") movieId: Int,
         @Query("api_key") apiKey: String,
-        @Query("include_image_language") includeImageLanguage: String = "pt,en,null"
+        @Query("include_image_language") includeImageLanguage: String = "pt,en,null,tr,es,fr,it,de,ja,ko,ru,zh"
     ): TmdbImagesResponse
 
     @GET("tv/{tv_id}/images")
     suspend fun getTvImages(
         @Path("tv_id") tvId: Int,
         @Query("api_key") apiKey: String,
-        @Query("include_image_language") includeImageLanguage: String = "pt,en,null"
+        @Query("include_image_language") includeImageLanguage: String = "pt,en,null,tr,es,fr,it,de,ja,ko,ru,zh"
     ): TmdbImagesResponse
 
     @GET("genre/movie/list")

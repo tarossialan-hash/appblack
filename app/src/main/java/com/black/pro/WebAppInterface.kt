@@ -18,7 +18,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.content.FileProvider
 import java.io.File
-import java.net.URL
+import com.google.gson.Gson
 
 class WebAppInterface(
     private val activity: Activity,
@@ -45,15 +45,18 @@ class WebAppInterface(
                     isSilent = false,
                     onProgress = { progress, status ->
                         val percent = (progress * 100).toInt()
-                        webView.evaluateJavascript("javascript:updateSyncProgress($percent, '$status')", null)
+                        val escapedStatus = escapeJs(status)
+                        webView.evaluateJavascript("javascript:updateSyncProgress($percent, '$escapedStatus')", null)
                     },
                     onError = { errorMsg ->
-                        webView.evaluateJavascript("javascript:onLoginError('$errorMsg')", null)
+                        val escapedError = escapeJs(errorMsg)
+                        webView.evaluateJavascript("javascript:onLoginError('$escapedError')", null)
                     }
                 ) {
                     sessionManager.saveLogin(user, pass)
                     // Chama a função JS de sucesso
-                    webView.evaluateJavascript("javascript:onLoginSuccess('$user')", null)
+                    val escapedUser = escapeJs(user)
+                    webView.evaluateJavascript("javascript:onLoginSuccess('$escapedUser')", null)
                 }
             } catch (e: Exception) {
                 webView.evaluateJavascript("javascript:onLoginError('Erro ao fazer login')", null)
@@ -84,8 +87,8 @@ class WebAppInterface(
 
     @JavascriptInterface
     fun loadCategory(categoryType: String) {
-        val u = sessionManager.getUsername() ?: return
-        val p = sessionManager.getPassword() ?: return
+        sessionManager.getUsername() ?: return
+        sessionManager.getPassword() ?: return
 
         CoroutineScope(Dispatchers.Main).launch {
             when (categoryType) {
@@ -178,6 +181,39 @@ class WebAppInterface(
     }
 
     @JavascriptInterface
+    fun getVodStreamUrl(streamId: Int, extension: String): String {
+        val u = sessionManager.getUsername() ?: return ""
+        val p = sessionManager.getPassword() ?: return ""
+        return "http://bkpac.cc/movie/$u/$p/$streamId.$extension"
+    }
+
+    @JavascriptInterface
+    fun getSeriesStreamUrl(episodeId: Int, extension: String): String {
+        val u = sessionManager.getUsername() ?: return ""
+        val p = sessionManager.getPassword() ?: return ""
+        return "http://bkpac.cc/series/$u/$p/$episodeId.$extension"
+    }
+
+    @JavascriptInterface
+    fun getSeriesInfo(seriesId: Int) {
+        val u = sessionManager.getUsername() ?: return
+        val p = sessionManager.getPassword() ?: return
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val info = NetworkModule.iptvService.getSeriesInfo(u, p, seriesId = seriesId)
+                val json = Gson().toJson(info)
+                withContext(Dispatchers.Main) {
+                    webView.evaluateJavascript("javascript:onSeriesInfoLoaded('${escapeJs(json)}')", null)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    webView.evaluateJavascript("javascript:onSeriesInfoLoaded('{}')", null)
+                }
+            }
+        }
+    }
+
+    @JavascriptInterface
     fun getVodCategories() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -224,6 +260,56 @@ class WebAppInterface(
             }
         }
     }
+
+    @JavascriptInterface
+    fun getRecentMovies() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val dao = AppDatabase.getDatabase(activity.applicationContext).iptvDao()
+                val movies = dao.getRecentMovies().first()
+                val jsonArray = JSONArray()
+                movies.forEach { m ->
+                    val obj = JSONObject()
+                    obj.put("streamId", m.streamId)
+                    obj.put("name", m.name)
+                    obj.put("streamIcon", m.streamIcon)
+                    obj.put("rating", m.rating)
+                    obj.put("containerExtension", m.containerExtension)
+                    jsonArray.put(obj)
+                }
+                withContext(Dispatchers.Main) {
+                    webView.evaluateJavascript("javascript:onRecentMoviesLoaded('${escapeJs(jsonArray.toString())}')", null)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun getRecentSeries() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val dao = AppDatabase.getDatabase(activity.applicationContext).iptvDao()
+                val series = dao.getRecentSeries().first()
+                val jsonArray = JSONArray()
+                series.forEach { s ->
+                    val obj = JSONObject()
+                    obj.put("seriesId", s.seriesId)
+                    obj.put("name", s.name)
+                    obj.put("cover", s.cover)
+                    obj.put("rating", s.rating)
+                    jsonArray.put(obj)
+                }
+                withContext(Dispatchers.Main) {
+                    webView.evaluateJavascript("javascript:onRecentSeriesLoaded('${escapeJs(jsonArray.toString())}')", null)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
 
     @JavascriptInterface
     fun getSeriesCategories() {
@@ -376,7 +462,9 @@ class WebAppInterface(
                     
                     if (remoteVersionCode > currentVersionCode) {
                         withContext(Dispatchers.Main) {
-                            webView.evaluateJavascript("javascript:showUpdateModal('$remoteVersionName', '$apkUrl')", null)
+                            val escapedVersion = escapeJs(remoteVersionName)
+                            val escapedUrl = escapeJs(apkUrl)
+                            webView.evaluateJavascript("javascript:showUpdateModal('$escapedVersion', '$escapedUrl')", null)
                         }
                     }
                 }
@@ -438,7 +526,8 @@ class WebAppInterface(
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    webView.evaluateJavascript("javascript:onUpdateError('${e.message ?: "Erro ao baixar arquivo"}')", null)
+                    val errorMsg = escapeJs(e.message ?: "Erro ao baixar arquivo")
+                    webView.evaluateJavascript("javascript:onUpdateError('$errorMsg')", null)
                 }
             }
         }

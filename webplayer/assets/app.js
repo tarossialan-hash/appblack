@@ -9,6 +9,9 @@ function fazerLogin() {
         return;
     }
 
+    localStorage.setItem("wb_user", user);
+    localStorage.setItem("wb_pass", pass);
+
     if (window.AndroidApp) {
         // Mostra a tela de sync imediatamente
         document.getElementById("login-screen").style.display = "none";
@@ -129,8 +132,9 @@ function recarregar() {
     let user = localStorage.getItem("wb_user");
     let pass = localStorage.getItem("wb_pass");
     
-    // Mostra tela de sincronização
+    // Mostra tela de sincronização e esconde a home
     document.getElementById("sync-screen").style.display = "flex";
+    document.getElementById("home-screen").style.display = "none";
     document.getElementById("sync-status-text").innerText = "Sincronizando banco de dados...";
     document.getElementById("sync-progress").style.width = "0%";
     
@@ -142,8 +146,33 @@ function recarregar() {
     if (window.AndroidApp && user && pass) {
         window.AndroidApp.login(user, pass);
     } else {
-        // Fallback case
-        setTimeout(() => window.location.reload(), 1000);
+        // Modo Web: simula a sincronização para não dar reload infinito e carregar atualizado
+        let currentStep = 0;
+        const steps = [
+            { text: "Sincronizando canais...", progress: 25, time: 800 },
+            { text: "Sincronizando EPG...", progress: 50, time: 1000 },
+            { text: "Sincronizando Filmes e Séries...", progress: 75, time: 1200 },
+            { text: "Carregando HOME...", progress: 100, time: 800 }
+        ];
+        
+        function nextStep() {
+            if (currentStep < steps.length) {
+                document.getElementById("sync-status-text").innerText = steps[currentStep].text;
+                document.getElementById("sync-progress").style.width = steps[currentStep].progress + '%';
+                setTimeout(() => {
+                    currentStep++;
+                    nextStep();
+                }, steps[currentStep].time);
+            } else {
+                document.getElementById("sync-screen").style.display = "none";
+                document.getElementById("home-screen").style.display = "block";
+                
+                const savedCat = localStorage.getItem('current_category') || 'inicio';
+                const savedBtn = Array.from(document.querySelectorAll('.nav-item')).find(el => el.getAttribute('onclick') && el.getAttribute('onclick').includes(`'${savedCat}'`)) || document.querySelector('.nav-item');
+                mostrarCategoria(savedBtn, savedCat);
+            }
+        }
+        nextStep();
     }
 }
 
@@ -173,9 +202,29 @@ function buscar() {
     }, 100);
 }
 
-// Funções de Navegação e Conteúdo
+function fecharBusca() {
+    const inicioBtn = document.querySelector('.nav-item');
+    mostrarCategoria(inicioBtn, 'inicio');
+}
+
 function mostrarCategoria(btn, cat) {
     localStorage.setItem('current_category', cat);
+    
+    // Para a reprodução do mini-player de TV ao Vivo ao sair da tela de canais
+    if (cat !== 'tv') {
+        if (mpegtsPlayer) {
+            try { mpegtsPlayer.destroy(); } catch(e) {}
+            mpegtsPlayer = null;
+        }
+        const videoElement = document.getElementById('live-player');
+        if (videoElement) {
+            try {
+                videoElement.pause();
+                videoElement.removeAttribute('src');
+                videoElement.load();
+            } catch(e) {}
+        }
+    }
     
     // Oculta a tela de busca se estiver ativa
     const searchScreen = document.getElementById('search-tv-screen');
@@ -200,33 +249,39 @@ function mostrarCategoria(btn, cat) {
         const bannerContainer = document.getElementById('dynamic-hero-banner');
         if (bannerContainer) bannerContainer.style.display = 'block';
         
-        const exploreBtn = document.querySelector('.explore-btn-container');
-        if (exploreBtn) exploreBtn.style.display = 'flex';
-        
         if (window.AndroidApp) {
-            window.AndroidApp.getBannerItems();
-            window.AndroidApp.loadCategory('filmes');
-            setTimeout(() => window.AndroidApp.loadCategory('series'), 500); 
+            // Android: só busca se o banner ainda não foi carregado
+            if (!window._bannerLoaded) {
+                window.AndroidApp.getBannerItems();
+                if (typeof window.AndroidApp.getRecentMovies === 'function') {
+                    window.AndroidApp.getRecentMovies();
+                }
+                if (typeof window.AndroidApp.getRecentSeries === 'function') {
+                    window.AndroidApp.getRecentSeries();
+                }
+                window._bannerLoaded = true;
+            }
         } else {
-            // Modo Web: busca filmes em cartaz reais da API TMDB via proxy
-            fetch('/api/tmdb/now-playing')
-                .then(r => r.json())
-                .then(data => {
-                    if (data && data.length > 0) {
-                        onBannerItemsLoaded(JSON.stringify(data));
-                    } else {
-                        // Fallback se a API falhar
+            // Web: só busca TMDB se o carrossel ainda não foi inicializado
+            if (!window._tmdbBannerLoaded) {
+                window._tmdbBannerLoaded = true;
+                fetch('/api/tmdb/now-playing')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data && data.length > 0) {
+                            onBannerItemsLoaded(JSON.stringify(data));
+                        } else {
+                            onBannerItemsLoaded(JSON.stringify([
+                                { title: "Carregando...", overview: "Buscando filmes em cartaz...", backdropUrl: "", releaseYear: "", voteAverage: "", ageRating: "" }
+                            ]));
+                        }
+                    })
+                    .catch(() => {
                         onBannerItemsLoaded(JSON.stringify([
-                            { title: "Carregando...", overview: "Buscando filmes em cartaz...", backdropUrl: "", releaseYear: "", voteAverage: "", ageRating: "" }
+                            { title: "Sem conexão", overview: "Não foi possível carregar os destaques.", backdropUrl: "", releaseYear: "", voteAverage: "", ageRating: "" }
                         ]));
-                    }
-                })
-                .catch(() => {
-                    // Fallback offline
-                    onBannerItemsLoaded(JSON.stringify([
-                        { title: "Sem conexão", overview: "Não foi possível carregar os destaques.", backdropUrl: "", releaseYear: "", voteAverage: "", ageRating: "" }
-                    ]));
-                });
+                    });
+            }
         }
     } else if (cat === 'tv') {
         document.querySelector('.home-scroll-area').style.display = 'none';
@@ -235,8 +290,7 @@ function mostrarCategoria(btn, cat) {
         
         const bannerContainer = document.getElementById('dynamic-hero-banner');
         if (bannerContainer) bannerContainer.style.display = 'none';
-        const exploreBtn = document.querySelector('.explore-btn-container');
-        if (exploreBtn) exploreBtn.style.display = 'none';
+
         
         document.getElementById('live-player-overlay').style.display = 'flex';
         document.getElementById('live-player-loader').style.display = 'none';
@@ -257,8 +311,7 @@ function mostrarCategoria(btn, cat) {
         
         const bannerContainer = document.getElementById('dynamic-hero-banner');
         if (bannerContainer) bannerContainer.style.display = 'none';
-        const exploreBtn = document.querySelector('.explore-btn-container');
-        if (exploreBtn) exploreBtn.style.display = 'none';
+
         
         document.getElementById('vod-categories-list').innerHTML = "";
         document.getElementById('vod-items-grid').innerHTML = "";
@@ -284,6 +337,24 @@ function onBannerItemsLoaded(jsonString) {
     try { items = JSON.parse(jsonString); } catch(e) {}
     if (!items || items.length === 0) return;
 
+    // Remove duplicados por título limpo
+    const seenTitles = new Set();
+    items = items.filter(item => {
+        const titleText = item.title || item.name;
+        if (!titleText) return false;
+        const clean = titleText.toLowerCase().trim()
+            .replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, '')
+            .replace(/\b(4k|fhd|uhd|1080p|720p|leg|dub|dublado|legendado)\b/g, '')
+            .trim();
+        if (seenTitles.has(clean)) {
+            return false;
+        }
+        seenTitles.add(clean);
+        return true;
+    });
+
+    if (items.length === 0) return;
+
     const container = document.getElementById('dynamic-hero-banner');
     if (!container) return;
 
@@ -296,6 +367,34 @@ function onBannerItemsLoaded(jsonString) {
     function posterUrl(item) {
         if (item.posterPath) return `https://image.tmdb.org/t/p/w342${item.posterPath}`;
         return '';
+    }
+
+    // Pré-valida imagens: descarta slides onde backdrop OU logo não carregam
+    function preloadImage(url) {
+        return new Promise(resolve => {
+            if (!url) { resolve(false); return; }
+            const img = new Image();
+            img.onload  = () => resolve(true);
+            img.onerror = () => resolve(false);
+            img.src = url;
+        });
+    }
+
+    async function initWithValidation() {
+        const validItems = [];
+        for (const item of items) {
+            const [backdropOk, logoOk] = await Promise.all([
+                preloadImage(item.backdropUrl),
+                preloadImage(item.logoUrl)
+            ]);
+            if (backdropOk && logoOk) {
+                validItems.push(item);
+            }
+            if (validItems.length >= 6) break;
+        }
+        if (validItems.length === 0) return;
+        items = validItems;
+        render(0);
     }
 
     function render(index) {
@@ -320,6 +419,10 @@ function onBannerItemsLoaded(jsonString) {
             ? `<img class="spotlight-poster" src="${poster}" alt="${item.title || ''}" onerror="this.style.display='none'">`
             : `<div class="spotlight-poster-placeholder"></div>`;
 
+        const titleHtml = item.logoUrl
+            ? `<img class="spotlight-logo" src="${item.logoUrl}" alt="${item.title || ''}" onerror="this.outerHTML='<div class=&quot;spotlight-title&quot;>${item.title || ''}</div>'">`
+            : `<div class="spotlight-title">${item.title || item.name || ''}</div>`;
+
         container.innerHTML = `
             <div class="spotlight-backdrop" style="background-image:url('${backdrop}')"></div>
             <div class="spotlight-gradient"></div>
@@ -332,10 +435,9 @@ function onBannerItemsLoaded(jsonString) {
             </button>
 
             <div class="spotlight-content">
-                ${posterHtml}
                 <div class="spotlight-info">
-                    <div class="spotlight-badge">&#9654; Em Cartaz</div>
-                    <div class="spotlight-title">${item.title || ''}</div>
+                    <div class="spotlight-badge">&#9654; Novidade</div>
+                    ${titleHtml}
                     <div class="spotlight-meta">${ratingChip}${yearChip}</div>
                     <div class="spotlight-overview">${item.overview || ''}</div>
                     <div class="spotlight-progress-bar">
@@ -343,8 +445,6 @@ function onBannerItemsLoaded(jsonString) {
                     </div>
                 </div>
             </div>
-
-            <div class="spotlight-thumbnails">${thumbsHtml}</div>
         `;
 
         // Eventos das setas
@@ -360,39 +460,110 @@ function onBannerItemsLoaded(jsonString) {
         container.onmouseenter = () => { progressPaused = true; };
         container.onmouseleave = () => {
             progressPaused = false;
-            progressStart = performance.now() - (progressPaused ? 0 : 0);
+            startProgress();
         };
 
         startProgress();
     }
 
     function startProgress() {
-        cancelAnimationFrame(progressTimer);
-        progressStart = performance.now();
-        const fill = document.getElementById('sp-progress');
-        if (!fill) return;
-
-        function tick(now) {
-            if (progressPaused) { progressTimer = requestAnimationFrame(tick); return; }
-            const elapsed = now - progressStart;
-            const pct = Math.min((elapsed / AUTOPLAY_MS) * 100, 100);
-            fill.style.width = pct + '%';
-            if (pct >= 100) { go(current + 1); return; }
-            progressTimer = requestAnimationFrame(tick);
-        }
-        progressTimer = requestAnimationFrame(tick);
+        clearTimeout(progressTimer);
+        progressTimer = setTimeout(() => {
+            if (!progressPaused) {
+                go(current + 1);
+            } else {
+                startProgress();
+            }
+        }, AUTOPLAY_MS);
     }
 
     function go(index) {
         current = ((index % items.length) + items.length) % items.length;
-        cancelAnimationFrame(progressTimer);
+        clearTimeout(progressTimer);
         render(current);
     }
 
-    render(0);
+    initWithValidation();
 
     const latestSection = document.getElementById('home-latest-section');
     if (latestSection) latestSection.style.display = 'none';
+}
+
+function onRecentMoviesLoaded(jsonString) {
+    let movies = [];
+    try { movies = JSON.parse(jsonString); } catch(e) {}
+    
+    const container = document.getElementById('movie-row');
+    const section = document.getElementById('home-movies-section');
+    if (!container || !section) return;
+    
+    container.innerHTML = '';
+    if (movies.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    section.style.display = 'block';
+    
+    // Mostra no máximo 15 itens para ficar harmonizado na tela de TV
+    movies.slice(0, 15).forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'vod-item';
+        div.tabIndex = 0;
+        
+        let iconHtml = m.streamIcon ? `<img src="${m.streamIcon}" class="vod-item-poster" onerror="this.style.display='none'">` : '';
+        const movieName = m.name || '';
+        let cleanTitle = movieName.replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, ' ').replace(/\b(4K|FHD|UHD|1080p|720p|LEG|DUB|DUBLADO|LEGENDADO|CAM|TS|HDTS|TELESYNC)\b/gi, ' ').trim();
+        
+        div.innerHTML = `${iconHtml}<div class="vod-item-title">${cleanTitle}</div>`;
+        
+        div.onclick = () => {
+            openVodModal(m, false);
+        };
+        
+        div.onkeydown = (e) => {
+            if (e.key === "Enter") div.click();
+        };
+        
+        container.appendChild(div);
+    });
+}
+
+function onRecentSeriesLoaded(jsonString) {
+    let series = [];
+    try { series = JSON.parse(jsonString); } catch(e) {}
+    
+    const container = document.getElementById('series-row');
+    const section = document.getElementById('home-series-section');
+    if (!container || !section) return;
+    
+    container.innerHTML = '';
+    if (series.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    section.style.display = 'block';
+    
+    series.slice(0, 15).forEach(s => {
+        const div = document.createElement('div');
+        div.className = 'vod-item';
+        div.tabIndex = 0;
+        
+        let iconHtml = s.cover ? `<img src="${s.cover}" class="vod-item-poster" onerror="this.style.display='none'">` : '';
+        const seriesName = s.name || '';
+        let cleanTitle = seriesName.replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, ' ').replace(/\b(4K|FHD|UHD|1080p|720p|LEG|DUB|DUBLADO|LEGENDADO|CAM|TS|HDTS|TELESYNC)\b/gi, ' ').trim();
+        
+        div.innerHTML = `${iconHtml}<div class="vod-item-title">${cleanTitle}</div>`;
+        
+        div.onclick = () => {
+            openVodModal(s, true);
+        };
+        
+        div.onkeydown = (e) => {
+            if (e.key === "Enter") div.click();
+        };
+        
+        container.appendChild(div);
+    });
 }
 
 // ==============================================================================
@@ -404,6 +575,7 @@ function onLiveCategoriesLoaded(jsonString) {
     
     const container = document.querySelector('.live-col-categories');
     container.innerHTML = "";
+    
     
     categories.forEach((cat, index) => {
         const div = document.createElement('div');
@@ -431,8 +603,11 @@ function onLiveCategoriesLoaded(jsonString) {
     // Auto-seleciona a primeira categoria
     if (categories.length > 0) {
         setTimeout(() => {
-            container.firstChild.focus();
-            container.firstChild.click();
+            const firstCat = container.querySelector('.live-category-item');
+            if (firstCat) {
+                firstCat.focus();
+                firstCat.click();
+            }
         }, 100);
     }
 }
@@ -448,17 +623,31 @@ function onLiveChannelsLoaded(jsonString) {
         const div = document.createElement('div');
         div.className = "live-channel-item";
         div.tabIndex = 0;
+        div._channelData = ch;
         
         let iconUrl = ch.streamIcon || ch.icon;
         let iconHtml = iconUrl ? `<img src="${iconUrl}" class="channel-logo" onerror="this.style.display='none'">` : '';
         div.innerHTML = `${iconHtml}<span>${ch.name}</span>`;
         
         div.onclick = () => {
+            if (div.classList.contains('active')) {
+                // Segundo clique: abre em tela cheia o mini-player SEM recarregar o vídeo
+                const previewContainer = document.querySelector('.live-player-container');
+                if (previewContainer) {
+                    if (previewContainer.requestFullscreen) {
+                        previewContainer.requestFullscreen();
+                    } else if (previewContainer.webkitRequestFullscreen) {
+                        previewContainer.webkitRequestFullscreen();
+                    }
+                }
+                return;
+            }
+            
+            // Primeiro clique: abre no mini-player
             document.querySelectorAll('.live-channel-item').forEach(el => el.classList.remove('active'));
             div.classList.add('active');
             
             document.getElementById('live-player-title').innerText = "Assistindo: " + ch.name;
-            // The overlay and loader will be handled by playLiveStream
             
             if (window.AndroidApp) {
                 window.AndroidApp.getEpg(ch.streamId);
@@ -489,162 +678,405 @@ const TMDB_API_KEY = "e8a5a7a31529ab1a19de1ffb7a09b0b5";
 async function fetchTmdbData(title, isSeries) {
     try {
         const type = isSeries ? 'tv' : 'movie';
-        let cleanTitle = title.replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, ' '); 
+        let cleanTitle = title.replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, ' ');
         cleanTitle = cleanTitle.replace(/\b(4K|FHD|UHD|1080p|720p|LEG|DUB|DUBLADO|LEGENDADO|CAM|TS|HDTS|TELESYNC)\b/gi, ' ').trim();
-        
+
         const searchUrl = `https://api.themoviedb.org/3/search/${type}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}&language=pt-BR`;
-        
-        const res = await fetch(searchUrl);
+        const res  = await fetch(searchUrl);
         const data = await res.json();
         const result = data.results && data.results.length > 0 ? data.results[0] : null;
         if (!result) return null;
-        
-        const imagesUrl = `https://api.themoviedb.org/3/${type}/${result.id}/images?api_key=${TMDB_API_KEY}`;
-        const imgRes = await fetch(imagesUrl);
+
+        // Busca detalhes + créditos + imagens em paralelo
+        const [detailsRes, creditsRes, imgRes] = await Promise.all([
+            fetch(`https://api.themoviedb.org/3/${type}/${result.id}?api_key=${TMDB_API_KEY}&language=pt-BR`),
+            fetch(`https://api.themoviedb.org/3/${type}/${result.id}/credits?api_key=${TMDB_API_KEY}&language=pt-BR`),
+            fetch(`https://api.themoviedb.org/3/${type}/${result.id}/images?api_key=${TMDB_API_KEY}&include_image_language=pt,en,null`)
+        ]);
+        const details = await detailsRes.json();
+        const credits = await creditsRes.json();
         const imgData = await imgRes.json();
-        const logo = imgData.logos ? imgData.logos.find(l => l.iso_639_1 === 'pt') || imgData.logos.find(l => l.iso_639_1 === 'en') || imgData.logos[0] : null;
-        
+
+        // Logo
+        const logos = imgData.logos || [];
+        const logo  = logos.find(l => l.iso_639_1 === 'pt') || logos.find(l => l.iso_639_1 === 'en') || logos[0];
+
+        // Gêneros
+        const genres = (details.genres || []).map(g => g.name);
+
+        // Duração
+        const runtime = details.runtime || (details.episode_run_time && details.episode_run_time[0]) || null;
+
+        // Data de lançamento formatada
+        const rawDate = details.release_date || details.first_air_date || '';
+        let releaseDate = '';
+        if (rawDate) {
+            const d = new Date(rawDate + 'T00:00:00');
+            releaseDate = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+
+        // Diretor e elenco
+        const crew = credits.crew || [];
+        const cast = credits.cast || [];
+        const directors = crew.filter(c => c.job === 'Director').map(c => c.name);
+        const castNames  = cast.slice(0, 8).map(c => c.name);
+
         return {
-            title: result.title || result.name,
-            overview: result.overview,
-            backdropUrl: result.backdrop_path ? `https://image.tmdb.org/t/p/original${result.backdrop_path}` : null,
-            posterUrl: result.poster_path ? `https://image.tmdb.org/t/p/w500${result.poster_path}` : null,
-            logoUrl: logo && logo.file_path ? `https://image.tmdb.org/t/p/w500${logo.file_path}` : null,
-            year: result.release_date ? result.release_date.substring(0,4) : (result.first_air_date ? result.first_air_date.substring(0,4) : null)
+            tmdbId:       result.id,
+            title:        result.title || result.name,
+            originalTitle: details.original_title || details.original_name || null,
+            overview:     result.overview,
+            backdropUrl:  result.backdrop_path  ? `https://image.tmdb.org/t/p/original${result.backdrop_path}` : null,
+            posterUrl:    result.poster_path    ? `https://image.tmdb.org/t/p/w500${result.poster_path}`       : null,
+            logoUrl:      logo && logo.file_path ? `https://image.tmdb.org/t/p/w500${logo.file_path}`          : null,
+            year:         rawDate ? rawDate.substring(0, 4) : null,
+            releaseDate,
+            genres,
+            runtime,
+            director:     directors,
+            cast:         castNames,
+            seasonsCount:  details.number_of_seasons || null,
+            episodesCount: details.number_of_episodes || null,
+            voteAverage:   details.vote_average ? details.vote_average.toFixed(1) : null
         };
     } catch (e) {
-        console.error("TMDB Fetch Error", e);
+        console.error('TMDB Fetch Error', e);
         return null;
     }
 }
 
+function playFullscreenVideo(streamUrl, title) {
+    const fsContainer = document.getElementById('fs-player-container');
+    const fsPlayer    = document.getElementById('fullscreen-player');
+    const fsLogo      = document.getElementById('fs-logo');
+    const fsTitle     = document.getElementById('fs-title');
+
+    if (fsContainer && fsPlayer) {
+        window.isFullscreenLive = false;
+        if (typeof updateFullscreenControlsVisibility === 'function') updateFullscreenControlsVisibility();
+        fsContainer.style.display = 'block';
+        fsPlayer.src = streamUrl;
+        fsPlayer.play();
+        fsPlayer.focus();
+        if (window.currentTmdb && window.currentTmdb.logoUrl) {
+            fsLogo.src = window.currentTmdb.logoUrl;
+            fsLogo.style.display = 'block';
+            fsTitle.style.display = 'none';
+        } else {
+            fsLogo.style.display = 'none';
+            fsTitle.innerText = title;
+            fsTitle.style.display = 'none';
+        }
+        setTimeout(() => { const fb = document.getElementById('fs-btn-play'); if (fb) fb.focus(); }, 200);
+        if (fsContainer.requestFullscreen)            fsContainer.requestFullscreen();
+        else if (fsContainer.webkitRequestFullscreen) fsContainer.webkitRequestFullscreen();
+    }
+}
+
+window.onSeriesInfoLoaded = function(jsonString) {
+    let data = {};
+    try { data = JSON.parse(jsonString); } catch(e) {}
+
+    const tabsContainer = document.getElementById('vod-detail-seasons-tabs');
+    const episodesContainer = document.getElementById('vod-detail-episodes-row');
+    const seasonTitleEl = document.getElementById('vod-detail-season-title');
+    const seriesSection = document.getElementById('vod-detail-series-section');
+
+    if (!tabsContainer || !episodesContainer) return;
+    tabsContainer.innerHTML = '';
+    episodesContainer.innerHTML = '';
+
+    const episodesMap = data.episodes || {};
+    const seasonsKeys = Object.keys(episodesMap).sort((a,b) => parseInt(a) - parseInt(b));
+
+    if (seasonsKeys.length === 0) {
+        if (seriesSection) seriesSection.style.display = 'none';
+        return;
+    }
+
+    if (seriesSection) seriesSection.style.display = 'block';
+
+    function renderSeasonEpisodes(seasonKey) {
+        episodesContainer.innerHTML = '';
+        if (seasonTitleEl) seasonTitleEl.textContent = `Temporada ${seasonKey}`;
+
+        const episodesList = episodesMap[seasonKey] || [];
+        episodesList.forEach(ep => {
+            const card = document.createElement('div');
+            card.className = 'episode-card';
+            card.tabIndex = 0;
+
+            const thumbUrl = (ep.info && ep.info.movieImage) ? ep.info.movieImage : (window._vodDetailItem ? (window._vodDetailItem.cover || window._vodDetailItem.streamIcon) : '');
+            let imgHtml = thumbUrl ? `<img src="${thumbUrl}" class="episode-card-thumb" onerror="this.src='logo_black.png'">` : `<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;color:#fff;">BLACK</div>`;
+
+            const badgeHtml = `<div class="episode-card-badge">E${ep.episodeNumber || ep.episode_num || ep.id}</div>`;
+            const titleHtml = `<div class="episode-card-info">${ep.title || `Episódio ${ep.episodeNumber}`}</div>`;
+
+            card.innerHTML = `${imgHtml}${badgeHtml}${titleHtml}`;
+
+            card.onclick = () => {
+                let streamUrl = '';
+                const extension = ep.containerExtension || 'mp4';
+                if (window.AndroidApp) {
+                    if (window.AndroidApp.getSeriesStreamUrl) {
+                        streamUrl = window.AndroidApp.getSeriesStreamUrl(ep.id, extension);
+                    } else {
+                        streamUrl = `http://bkpac.cc/series/${window.AndroidApp.getUsername()}/${window.AndroidApp.getPassword()}/${ep.id}.${extension}`;
+                    }
+                } else {
+                    streamUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+                }
+
+                if (streamUrl) {
+                    playFullscreenVideo(streamUrl, ep.title || `Episódio ${ep.episodeNumber}`);
+                }
+            };
+            card.onkeydown = (e) => { if (e.key === 'Enter') card.click(); };
+            episodesContainer.appendChild(card);
+        });
+    }
+
+    seasonsKeys.forEach((key, index) => {
+        const tab = document.createElement('button');
+        tab.className = 'season-tab';
+        tab.tabIndex = 0;
+        tab.textContent = `Temporada ${key}`;
+
+        tab.onclick = () => {
+            document.querySelectorAll('.season-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            renderSeasonEpisodes(key);
+        };
+        tab.onkeydown = (e) => { if (e.key === 'Enter') tab.click(); };
+
+        tabsContainer.appendChild(tab);
+
+        if (index === 0) {
+            tab.classList.add('active');
+            renderSeasonEpisodes(key);
+        }
+    });
+};
+
 function openVodModal(item, isSeries) {
-    const modal = document.getElementById('vod-details-modal');
-    const modalContent = document.getElementById('vod-modal-content');
-    const loader = document.getElementById('vod-modal-loader');
-    
-    // Show modal container and loader, hide content
-    modal.style.display = 'flex';
-    if (modalContent) modalContent.style.opacity = '0';
-    if (loader) loader.style.display = 'block';
-    
-    // Trigger fade in for the background
-    setTimeout(() => modal.classList.add('show'), 10);
-    
-    const poster = isSeries ? item.cover : item.streamIcon;
-    const bgUrl = poster ? `url('${poster}')` : '';
-    
-    document.getElementById('vod-modal-bg').style.backgroundImage = bgUrl;
-    document.getElementById('vod-modal-poster').src = poster || '';
-    
-    const titleEl = document.getElementById('vod-modal-title');
-    const logoEl = document.getElementById('vod-modal-logo');
-    titleEl.innerText = item.name;
-    titleEl.style.display = 'block';
-    if(logoEl) { logoEl.style.display = 'none'; logoEl.src = ''; }
-    
-    document.getElementById('vod-modal-rating').innerText = `⭐ ${item.rating || "N/A"}`;
-    const yearEl = document.getElementById('vod-modal-year');
-    if(yearEl) yearEl.innerText = "HD"; 
-    
-    const synopsisEl = document.getElementById('vod-modal-synopsis');
-    if(synopsisEl) synopsisEl.innerText = "Buscando informações...";
-    
+    window._lastFocusedVodItem = document.activeElement;
+    const topNav = document.querySelector('.top-nav');
+    if (topNav) {
+        window._detailPrevTopNavDisplay = topNav.style.display;
+        topNav.style.display = 'none';
+    }
+
+    const screen   = document.getElementById('vod-detail-screen');
+    const loader   = document.getElementById('vod-detail-loader');
+    const backdrop = document.getElementById('vod-detail-backdrop');
+    const poster   = document.getElementById('vod-detail-poster');
+    const logoEl   = document.getElementById('vod-detail-logo');
+    const titleEl  = document.getElementById('vod-detail-title');
+    const origEl   = document.getElementById('vod-detail-original');
+    const overviewEl = document.getElementById('vod-detail-overview');
+    const dateEl   = document.getElementById('vod-detail-date');
+    const genreEl  = document.getElementById('vod-detail-genre');
+    const runtimeEl = document.getElementById('vod-detail-runtime');
+    const creditsEl = document.getElementById('vod-detail-credits');
+    const directorEl = document.getElementById('vod-detail-director');
+    const castEl   = document.getElementById('vod-detail-cast');
+    const relSection = document.getElementById('vod-detail-related-section');
+    const relRow   = document.getElementById('vod-detail-related-row');
+    const seriesSection = document.getElementById('vod-detail-series-section');
+
+    // Guarda o item corrente para o botão Assistir
+    window._vodDetailItem    = item;
+    window._vodDetailSeries  = isSeries;
+    window.currentTmdb       = null;
+
+    // Reseta a tela
+    if (loader)   loader.style.display   = 'block';
+    if (backdrop) backdrop.style.backgroundImage = '';
+    if (poster)   { poster.src = isSeries ? (item.cover || '') : (item.streamIcon || ''); }
+    if (logoEl)   { logoEl.style.display = 'none'; logoEl.src = ''; }
+    if (titleEl)  { titleEl.textContent = item.name || ''; titleEl.style.display = 'block'; }
+    if (origEl)   origEl.textContent = '';
+    if (overviewEl) overviewEl.textContent = 'Buscando informações...';
+    if (dateEl)   dateEl.innerHTML = '';
+    if (genreEl)  genreEl.innerHTML = '';
+    if (runtimeEl) runtimeEl.innerHTML = '';
+    if (creditsEl) creditsEl.style.display = 'none';
+    if (relSection) relSection.style.display = 'none';
+    if (relRow)   relRow.innerHTML = '';
+    if (seriesSection) seriesSection.style.display = 'none';
+
+    // Exibe a tela
+    screen.style.display = 'flex';
+    screen.scrollTop = 0;
+
+    // Botão Voltar Redondo
+    const btnBackRound = document.getElementById('vod-detail-screen-back-btn');
+    if (btnBackRound) btnBackRound.onclick = closeVodModal;
+
+    // Botão Favoritar (reusa lógica existente se disponível)
+    const btnFav = document.getElementById('vod-detail-btn-fav');
+    if (btnFav) {
+        btnFav.onclick = () => {
+            if (window.AndroidApp && window.AndroidApp.addFavorite) {
+                window.AndroidApp.addFavorite(JSON.stringify(item));
+            }
+        };
+    }
+
+    // Botão Assistir
+    const btnPlay = document.getElementById('vod-detail-btn-play');
+    if (btnPlay) {
+        btnPlay.onclick = () => {
+            let streamUrl = '';
+            if (window.AndroidApp) {
+                if (window.AndroidApp.getVodStreamUrl) {
+                    streamUrl = isSeries
+                        ? window.AndroidApp.getSeriesStreamUrl(item.seriesId || item.streamId, item.containerExtension || 'mp4')
+                        : window.AndroidApp.getVodStreamUrl(item.streamId, item.containerExtension || 'mp4');
+                } else {
+                    streamUrl = isSeries ? '' : window.AndroidApp.getStreamUrl(item.streamId);
+                    if (streamUrl) streamUrl = streamUrl.replace('.ts', '.' + (item.containerExtension || 'mp4'));
+                }
+            } else {
+                streamUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+            }
+            if (streamUrl) {
+                playFullscreenVideo(streamUrl, item.name);
+            }
+        };
+        setTimeout(() => btnPlay.focus(), 150);
+    }
+
+    // Busca TMDB
     fetchTmdbData(item.name, isSeries).then(tmdb => {
         window.currentTmdb = tmdb;
+        if (loader) loader.style.display = 'none';
+
         if (tmdb) {
-            if (tmdb.title && titleEl) titleEl.innerText = tmdb.title;
-            if (tmdb.overview && synopsisEl) synopsisEl.innerText = tmdb.overview;
-            if (tmdb.backdropUrl) document.getElementById('vod-modal-bg').style.backgroundImage = `url('${tmdb.backdropUrl}')`;
-            if (tmdb.posterUrl) document.getElementById('vod-modal-poster').src = tmdb.posterUrl;
-            if (tmdb.year && yearEl) yearEl.innerText = tmdb.year;
+            // Backdrop
+            if (tmdb.backdropUrl && backdrop) {
+                backdrop.style.backgroundImage = `url('${tmdb.backdropUrl}')`;
+            }
+            // Poster
+            if (tmdb.posterUrl && poster) poster.src = tmdb.posterUrl;
+            // Logo / Título
             if (tmdb.logoUrl && logoEl) {
                 logoEl.src = tmdb.logoUrl;
                 logoEl.style.display = 'block';
-                titleEl.style.display = 'none';
+                if (titleEl) titleEl.style.display = 'none';
             } else {
-                titleEl.style.display = 'block';
+                if (titleEl) {
+                    titleEl.textContent = tmdb.title || item.name || '';
+                    titleEl.style.display = 'block';
+                }
             }
-        } else {
-            if(synopsisEl) synopsisEl.innerText = isSeries 
-                ? "Temporadas incríveis esperam por você! Prepare a pipoca para assistir " + item.name + "."
-                : "Prepare-se para grandes emoções com " + item.name + ". Uma história incrível aguarda você!";
-        }
-        
-        // Hide loader and show content
-        if (loader) loader.style.display = 'none';
-        if (modalContent) modalContent.style.opacity = '1';
-    });
-
-        
-    const btnPlay = document.getElementById('vod-btn-play');
-    const btnClose = document.getElementById('vod-btn-close');
-    btnPlay.onclick = () => {
-        closeVodModal();
-        let streamUrl = "";
-        if (window.AndroidApp) {
-            if (window.AndroidApp.getVodStreamUrl) {
-                streamUrl = isSeries 
-                    ? window.AndroidApp.getSeriesStreamUrl(item.seriesId || item.streamId, item.containerExtension || 'mp4') 
-                    : window.AndroidApp.getVodStreamUrl(item.streamId, item.containerExtension || 'mp4');
-            } else {
-                streamUrl = isSeries ? "" : window.AndroidApp.getStreamUrl(item.streamId);
-                if (streamUrl) streamUrl = streamUrl.replace('.ts', '.' + (item.containerExtension || 'mp4'));
+            // Título original
+            if (origEl && tmdb.originalTitle && tmdb.originalTitle !== (tmdb.title || item.name)) {
+                origEl.textContent = tmdb.originalTitle;
             }
-        } else {
-            streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-        }
-        
-        if (streamUrl) {
-            const fsContainer = document.getElementById('fs-player-container');
-            const fsPlayer = document.getElementById('fullscreen-player');
-            const fsLogo = document.getElementById('fs-logo');
-            const fsTitle = document.getElementById('fs-title');
+            // Overview
+            if (overviewEl) overviewEl.textContent = tmdb.overview || '';
             
-            if(fsContainer && fsPlayer) {
-                fsContainer.style.display = 'block';
-                fsPlayer.src = streamUrl;
-                fsPlayer.play();
-                fsPlayer.focus();
-                
-                // Set Logo or Title
-                if (window.currentTmdb && window.currentTmdb.logoUrl) {
-                    fsLogo.src = window.currentTmdb.logoUrl;
-                    fsLogo.style.display = 'block';
-                    fsTitle.style.display = 'none';
-                } else {
-                    fsLogo.style.display = 'none';
-                    fsTitle.innerText = item.name;
-                    fsTitle.style.display = 'block';
+            // Metadata: renderização inteligente conforme imagens anexadas
+            let metaHtml = '';
+            if (isSeries) {
+                if (tmdb.seasonsCount) {
+                    metaHtml += `<span style="display:flex;align-items:center;gap:5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg> ${tmdb.seasonsCount} Temporadas</span>`;
                 }
-
-                // Dar foco automático no botão Play para o controle remoto D-PAD funcionar
-                setTimeout(() => {
-                    const focusBtn = document.getElementById('fs-btn-play');
-                    if (focusBtn) focusBtn.focus();
-                }, 200);
-
-                if (fsContainer.requestFullscreen) {
-                    fsContainer.requestFullscreen();
-                } else if (fsContainer.webkitRequestFullscreen) {
-                    fsContainer.webkitRequestFullscreen();
+                if (tmdb.episodesCount) {
+                    metaHtml += `<span style="display:flex;align-items:center;gap:5px;margin-left:10px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg> ${tmdb.episodesCount} Episódios</span>`;
                 }
             }
+            if (tmdb.releaseDate) {
+                metaHtml += `<span style="display:flex;align-items:center;gap:5px;margin-left:10px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${tmdb.releaseDate}</span>`;
+            }
+            if (tmdb.genres && tmdb.genres.length) {
+                metaHtml += `<span style="display:flex;align-items:center;gap:5px;margin-left:10px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg> ${tmdb.genres.slice(0,3).join(', ')}</span>`;
+            }
+            if (!isSeries && tmdb.runtime) {
+                const h = Math.floor(tmdb.runtime / 60), m = tmdb.runtime % 60;
+                metaHtml += `<span style="display:flex;align-items:center;gap:5px;margin-left:10px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${h > 0 ? h + 'h ' : ''}${m}min</span>`;
+            }
+            if (isSeries && tmdb.voteAverage) {
+                metaHtml += `<span style="display:flex;align-items:center;gap:5px;margin-left:10px;color:#f39c12;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ${tmdb.voteAverage}</span>`;
+            }
+            
+            const metaContainer = document.getElementById('vod-detail-meta');
+            if (metaContainer) metaContainer.innerHTML = metaHtml;
+
+            // Créditos
+            const hasDir = tmdb.director && tmdb.director.length;
+            const hasCast = tmdb.cast && tmdb.cast.length;
+            if ((hasDir || hasCast) && creditsEl) {
+                if (hasDir && directorEl)  directorEl.innerHTML = `<span style="color:rgba(255,255,255,0.75)">Direção:</span> ${tmdb.director.join(', ')}`;
+                if (hasCast && castEl)     castEl.innerHTML = `<span style="color:rgba(255,255,255,0.75)">Elenco:</span> ${tmdb.cast.slice(0,5).join(', ')}`;
+                creditsEl.style.display = 'block';
+            }
+        } else {
+            if (overviewEl) overviewEl.textContent = isSeries
+                ? 'Temporadas incríveis esperam por você com ' + item.name + '.'
+                : 'Prepare-se para grandes emoções com ' + item.name + '.';
         }
-    };
-    
-    btnClose.onclick = closeVodModal;
-    
-    // Auto-focus play button
-    setTimeout(() => btnPlay.focus(), 100);
+
+        // Se for série, busca os episódios via API ou mock
+        if (isSeries) {
+            if (window.AndroidApp && window.AndroidApp.getSeriesInfo) {
+                window.AndroidApp.getSeriesInfo(item.seriesId || item.streamId);
+            } else if (window.WebBridge && window.WebBridge.getSeriesInfo) {
+                window.WebBridge.getSeriesInfo(item.seriesId || item.streamId);
+            }
+        } else {
+            // Linha de filmes relacionados (apenas para VOD/filmes)
+            const cacheKey = window._pendingCacheKey;
+            const cached = cacheKey && window._vodCache && window._vodCache[cacheKey];
+            if (cached && relRow && relSection) {
+                try {
+                    const list = JSON.parse(cached);
+                    const others = list.filter(m => m.streamId !== item.streamId && m.streamIcon).slice(0, 15);
+                    if (others.length > 0) {
+                        others.forEach(m => {
+                            const card = document.createElement('div');
+                            card.className = 'vod-item';
+                            card.tabIndex = 0;
+
+                            let iconHtml = m.streamIcon
+                                ? `<img src="${m.streamIcon}" class="vod-item-poster" onerror="this.style.display='none'">`
+                                : '';
+
+                            let cleanTitle = (m.name || '')
+                                .replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, ' ')
+                                .replace(/\b(4K|FHD|UHD|1080p|720p|LEG|DUB|DUBLADO|LEGENDADO|CAM|TS|HDTS|TELESYNC)\b/gi, ' ')
+                                .trim();
+
+                            card.innerHTML = `${iconHtml}<div class="vod-item-title">${cleanTitle}</div>`;
+                            card.onclick = () => openVodModal(m, isSeries);
+                            card.onkeydown = (e) => { if (e.key === "Enter") card.click(); };
+                            relRow.appendChild(card);
+                        });
+                        relSection.style.display = 'block';
+                    }
+                } catch(_) {}
+            }
+        }
+    });
 }
 
 function closeVodModal() {
-    const modal = document.getElementById('vod-details-modal');
-    modal.classList.remove('show');
-    setTimeout(() => {
-        modal.style.display = 'none';
-    }, 300);
+    const screen = document.getElementById('vod-detail-screen');
+    if (screen) screen.style.display = 'none';
+
+    // Restaura o topNav
+    const topNav = document.querySelector('.top-nav');
+    if (topNav && window._detailPrevTopNavDisplay !== undefined) {
+        topNav.style.display = window._detailPrevTopNavDisplay;
+    }
+
+    // Devolve o foco para o elemento que abriu a tela
+    if (window._lastFocusedVodItem && typeof window._lastFocusedVodItem.focus === 'function') {
+        setTimeout(() => {
+            window._lastFocusedVodItem.focus();
+        }, 50);
+    }
 }
 
 function onVodCategoriesLoaded(jsonString) {
@@ -653,6 +1085,7 @@ function onVodCategoriesLoaded(jsonString) {
     
     const container = document.getElementById('vod-categories-list');
     container.innerHTML = '';
+    
     
     // Cache global para categorias VOD
     if (!window._vodCache) window._vodCache = {};
@@ -702,8 +1135,11 @@ function onVodCategoriesLoaded(jsonString) {
     
     if (categories.length > 0) {
         setTimeout(() => {
-            container.firstChild.focus({ preventScroll: true });
-            container.firstChild.click();
+            const firstCat = container.querySelector('.live-category-item');
+            if (firstCat) {
+                firstCat.focus({ preventScroll: true });
+                firstCat.click();
+            }
         }, 50);
     }
 }
@@ -758,6 +1194,7 @@ function onSeriesCategoriesLoaded(jsonString) {
     const container = document.getElementById('vod-categories-list');
     container.innerHTML = '';
     
+    
     // Cache global para categorias de Séries
     if (!window._seriesCache) window._seriesCache = {};
     window._currentVodType = 'series';
@@ -803,8 +1240,11 @@ function onSeriesCategoriesLoaded(jsonString) {
     
     if (categories.length > 0) {
         setTimeout(() => {
-            container.firstChild.focus({ preventScroll: true });
-            container.firstChild.click();
+            const firstCat = container.querySelector('.live-category-item');
+            if (firstCat) {
+                firstCat.focus({ preventScroll: true });
+                firstCat.click();
+            }
         }, 50);
     }
 }
@@ -965,6 +1405,12 @@ document.addEventListener('keydown', function(e) {
             focusables = Array.from(document.querySelectorAll('input, button, [tabindex="0"]'));
         }
             
+        let active = document.activeElement;
+        const activeRow = active ? active.closest('.home-row') : null;
+        if (activeRow && ['ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            focusables = Array.from(activeRow.querySelectorAll('.vod-item, [tabindex="0"]'));
+        }
+
         focusables = focusables.filter(el => {
             const rect = el.getBoundingClientRect();
             return rect.width > 0 && rect.height > 0 && 
@@ -974,7 +1420,6 @@ document.addEventListener('keydown', function(e) {
             
         if (focusables.length === 0) return;
 
-        let active = document.activeElement;
         if (!focusables.includes(active)) {
             focusables[0].focus();
             e.preventDefault();
@@ -998,19 +1443,20 @@ document.addEventListener('keydown', function(e) {
             const activeCenter = { x: activeRect.left + activeRect.width/2, y: activeRect.top + activeRect.height/2 };
             const candCenter = { x: candRect.left + candRect.width/2, y: candRect.top + candRect.height/2 };
 
-            if (e.key === 'ArrowUp' && candCenter.y < activeCenter.y) {
+            const threshold = 10;
+            if (e.key === 'ArrowUp' && candCenter.y < activeCenter.y - threshold) {
                 isDirectionMatch = true;
                 distPrimary = activeRect.top - candRect.bottom;
                 distSecondary = Math.abs(activeCenter.x - candCenter.x);
-            } else if (e.key === 'ArrowDown' && candCenter.y > activeCenter.y) {
+            } else if (e.key === 'ArrowDown' && candCenter.y > activeCenter.y + threshold) {
                 isDirectionMatch = true;
                 distPrimary = candRect.top - activeRect.bottom;
                 distSecondary = Math.abs(activeCenter.x - candCenter.x);
-            } else if (e.key === 'ArrowLeft' && candCenter.x < activeCenter.x) {
+            } else if (e.key === 'ArrowLeft' && candCenter.x < activeCenter.x - threshold) {
                 isDirectionMatch = true;
                 distPrimary = activeRect.left - candRect.right;
                 distSecondary = Math.abs(activeCenter.y - candCenter.y);
-            } else if (e.key === 'ArrowRight' && candCenter.x > activeCenter.x) {
+            } else if (e.key === 'ArrowRight' && candCenter.x > activeCenter.x + threshold) {
                 isDirectionMatch = true;
                 distPrimary = candRect.left - activeRect.right;
                 distSecondary = Math.abs(activeCenter.y - candCenter.y);
@@ -1031,7 +1477,14 @@ document.addEventListener('keydown', function(e) {
 
         if (bestCandidate) {
             bestCandidate.focus({ preventScroll: true });
-            bestCandidate.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            if (bestCandidate.closest('.top-nav')) {
+                const scrollArea = document.querySelector('.home-scroll-area');
+                if (scrollArea) {
+                    scrollArea.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            } else {
+                bestCandidate.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            }
         }
     }
 });
@@ -1219,11 +1672,8 @@ function voltarParaInicio(e) {
 window.addEventListener('DOMContentLoaded', () => {
     const savedUser = localStorage.getItem('logged_in_user');
     if (savedUser) {
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('home-screen').style.display = 'block';
-        setTimeout(() => {
-            mostrarCategoria(document.querySelector('.nav-item.active'), 'inicio');
-        }, 100);
+        // Sincroniza automaticamente ao abrir o app
+        recarregar();
     } else {
         setTimeout(() => {
             const usernameInput = document.getElementById('username');
@@ -1399,18 +1849,10 @@ function setupFullscreenPlayer() {
         showUi();
     });
 
-    const exitPlayer = (e) => {
+    btnBack.addEventListener('click', (e) => {
         if(e) e.stopPropagation();
-        if (document.fullscreenElement || document.webkitIsFullScreen) {
-            if(document.exitFullscreen) document.exitFullscreen();
-            else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
-        }
-        fsPlayer.pause();
-        fsPlayer.src = '';
-        fsContainer.style.display = 'none';
-    };
-
-    btnBack.addEventListener('click', exitPlayer);
+        closeFullscreenPlayer();
+    });
 
     btnFullscreen.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1426,8 +1868,6 @@ function setupFullscreenPlayer() {
     const onFullscreenChange = () => {
         if (!document.fullscreenElement && !document.webkitIsFullScreen) {
             // Só encerra se o usuário explicitamente saiu do fullscreen sem ser pelo botão Voltar
-            // O exitPlayer é chamado diretamente pelo btnBack; não devemos chamar aqui
-            // para evitar conflito com cliques nos botões dentro do player
         }
     };
 
@@ -1435,11 +1875,168 @@ function setupFullscreenPlayer() {
     document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 }
 
+let fsMpegtsPlayer = null;
+window.isFullscreenLive = false;
+
+function updateFullscreenControlsVisibility() {
+    const rewind = document.getElementById('fs-btn-rewind');
+    const forward = document.getElementById('fs-btn-forward');
+    const progress = document.getElementById('fs-progress');
+    const timeCurrent = document.getElementById('fs-time-current');
+    const timeTotal = document.getElementById('fs-time-total');
+    const btnFullscreen = document.getElementById('fs-btn-fullscreen');
+    const controlsRow = document.getElementById('fs-controls-row');
+    
+    const displayStyle = window.isFullscreenLive ? 'none' : 'block';
+    
+    if (rewind) rewind.style.display = displayStyle;
+    if (forward) forward.style.display = displayStyle;
+    if (progress) progress.style.display = displayStyle;
+    if (timeCurrent) timeCurrent.style.display = displayStyle;
+    if (timeTotal) timeTotal.style.display = displayStyle;
+    if (btnFullscreen) btnFullscreen.style.display = displayStyle;
+    
+    if (controlsRow) {
+        if (window.isFullscreenLive) {
+            controlsRow.style.justifyContent = 'center';
+        } else {
+            controlsRow.style.justifyContent = 'flex-start';
+        }
+    }
+}
+
+function playLiveFullscreen(url, name) {
+    const fsContainer = document.getElementById('fs-player-container');
+    const fsPlayer = document.getElementById('fullscreen-player');
+    const fsLogo = document.getElementById('fs-logo');
+    const fsTitle = document.getElementById('fs-title');
+    
+    if (!fsContainer || !fsPlayer) return;
+    
+    window.isFullscreenLive = true;
+    updateFullscreenControlsVisibility();
+    
+    // Para o player de preview
+    if (mpegtsPlayer) {
+        mpegtsPlayer.destroy();
+        mpegtsPlayer = null;
+    }
+    const videoElement = document.getElementById('live-player');
+    if (videoElement) {
+        videoElement.pause();
+        videoElement.src = '';
+    }
+    
+    fsContainer.style.display = 'block';
+    
+    // Oculta a logo do VOD e exibe o título do canal
+    if (fsLogo) fsLogo.style.display = 'none';
+    if (fsTitle) {
+        fsTitle.innerText = name;
+        fsTitle.style.display = 'none'; // REMOVIDO: Não exibe mais título em texto
+    }
+    
+    // Inicia o player mpegts no fullscreen-player
+    if (fsMpegtsPlayer) {
+        fsMpegtsPlayer.destroy();
+        fsMpegtsPlayer = null;
+    }
+    
+    if (typeof mpegts !== 'undefined' && mpegts.getFeatureList().mseLivePlayback) {
+        fsMpegtsPlayer = mpegts.createPlayer({
+            type: 'mpegts',
+            isLive: true,
+            url: url
+        });
+        fsMpegtsPlayer.attachMediaElement(fsPlayer);
+        fsMpegtsPlayer.load();
+        fsMpegtsPlayer.play().catch(e => console.log('Autoplay prevented:', e));
+    } else {
+        fsPlayer.src = url;
+        fsPlayer.play().catch(e => console.log('Autoplay prevented:', e));
+    }
+    
+    // Foca no botão play do fullscreen
+    setTimeout(() => {
+        const focusBtn = document.getElementById('fs-btn-play');
+        if (focusBtn) focusBtn.focus();
+    }, 200);
+    
+    if (fsContainer.requestFullscreen) {
+        fsContainer.requestFullscreen();
+    } else if (fsContainer.webkitRequestFullscreen) {
+        fsContainer.webkitRequestFullscreen();
+    }
+}
+
+function closeFullscreenPlayer() {
+    const fsContainer = document.getElementById('fs-player-container');
+    const fsPlayer = document.getElementById('fullscreen-player');
+    if (!fsContainer || !fsPlayer) return;
+
+    if (document.fullscreenElement || document.webkitIsFullScreen) {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }
+    
+    if (fsMpegtsPlayer) {
+        fsMpegtsPlayer.destroy();
+        fsMpegtsPlayer = null;
+    }
+
+    fsPlayer.pause();
+    fsPlayer.src = '';
+    fsContainer.style.display = 'none';
+    
+    // Restaura o canal que estava tocando no mini-player
+    const activeChannel = document.querySelector('.live-channel-item.active');
+    if (activeChannel) {
+        reiniciarPreviewCanal(activeChannel);
+        setTimeout(() => activeChannel.focus(), 100);
+    }
+}
+
+function reiniciarPreviewCanal(itemElement) {
+    const ch = itemElement._channelData;
+    if (!ch) return;
+    
+    document.getElementById('live-player-title').innerText = "Assistindo: " + ch.name;
+    
+    if (window.AndroidApp) {
+        window.AndroidApp.getEpg(ch.streamId);
+        let streamUrl = window.AndroidApp.getStreamUrl(ch.streamId);
+        if (streamUrl) playLiveStream(streamUrl);
+    } else {
+        onEpgLoaded(JSON.stringify([{title: "Programa Mock", start: "10:00", end: "11:00", description: "Descrição..."}]));
+        const videoElement = document.getElementById('live-player');
+        document.getElementById('live-player-overlay').style.display = 'none';
+        videoElement.src = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+        videoElement.play();
+    }
+}
+
 setupFullscreenPlayer();
 
-// Sincronizar foco do seletor (D-PAD) com o hover do mouse
+// Sincronizar foco do seletor (D-PAD) com o hover do mouse, mas evitando capturas involuntárias
+let lastMouseX = 0;
+let lastMouseY = 0;
+let mouseActive = false;
+
+document.addEventListener('mousemove', (e) => {
+    if (e.clientX !== lastMouseX || e.clientY !== lastMouseY) {
+        mouseActive = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+    }
+});
+
+document.addEventListener('keydown', () => {
+    mouseActive = false;
+});
+
 document.addEventListener('mouseover', (e) => {
-    const focusable = e.target.closest('[tabindex="0"], button, input, select, textarea, .nav-item, .live-category-item, .live-channel-item, .tmdb-card, .sk-key');
+    if (!mouseActive) return;
+    const focusable = e.target.closest('[tabindex="0"], button, input, select, textarea, .nav-item, .live-category-item, .live-channel-item, .tmdb-card, .sk-key, .vod-item');
     if (focusable && document.activeElement !== focusable) {
         focusable.focus({ preventScroll: true });
     }
@@ -1602,6 +2199,19 @@ function createSearchCard(item, isSeries) {
 
 // Controlador unificado de navegação para botão Voltar (Escape / Back remoto)
 window.handleAndroidBack = function() {
+    // Se o mini-player de TV ao vivo estiver em tela cheia, sai da tela cheia
+    const previewContainer = document.querySelector('.live-player-container');
+    if (document.fullscreenElement === previewContainer || document.webkitFullscreenElement === previewContainer) {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        
+        const activeChannel = document.querySelector('.live-channel-item.active');
+        if (activeChannel) {
+            setTimeout(() => activeChannel.focus(), 100);
+        }
+        return;
+    }
+
     // -1. Se o modal de confirmação de saída estiver aberto, fecha ele
     const exitModal = document.getElementById('exit-confirm-modal');
     if (exitModal && exitModal.style.display !== 'none') {
@@ -1623,9 +2233,9 @@ window.handleAndroidBack = function() {
         return;
     }
 
-    // 2. Se o modal de detalhes do VOD estiver aberto, fecha ele
-    const vodModal = document.getElementById('vod-details-modal');
-    if (vodModal && (vodModal.style.display === 'flex' || vodModal.classList.contains('show'))) {
+    // 2. Se a tela de detalhes do VOD estiver aberta, fecha ela
+    const vodDetailScreen = document.getElementById('vod-detail-screen');
+    if (vodDetailScreen && vodDetailScreen.style.display !== 'none') {
         closeVodModal();
         return;
     }

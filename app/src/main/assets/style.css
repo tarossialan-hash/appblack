@@ -23,7 +23,7 @@ body {
 .app-container {
     width: 100%;
     height: 100%;
-    background: radial-gradient(circle at 70% 30%, #1a1a1a 0%, #050505 60%, #000000 100%);
+    background-color: #000000;
 }
 
 .screen {
@@ -258,7 +258,7 @@ body {
    ======================================================= */
 /* NavBar Superior */
 .top-nav {
-    position: fixed;
+    position: absolute;
     top: 0;
     left: 0;
     width: 100%;
@@ -266,8 +266,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 64px;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.95) 0%, transparent 100%);
+    padding: 0 64px 0 40px;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.75) 45%, rgba(0, 0, 0, 0) 100%);
     z-index: 9999;
 }
 
@@ -296,8 +296,8 @@ body {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     border-radius: 8px;
     transition: all 0.2s;
     outline: none;
@@ -312,13 +312,13 @@ body {
     background-color: #fff;
     color: #000;
     outline: none;
-    transform: scale(1.1);
-    box-shadow: 0 4px 15px rgba(255,255,255,0.3);
+    transform: scale(1.02);
+    box-shadow: 0 4px 10px rgba(255,255,255,0.25);
 }
 
 .action-btn .icon {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
 }
 
 .divider {
@@ -332,9 +332,9 @@ body {
     background: transparent;
     border: 1px solid transparent;
     color: rgba(255,255,255,0.7);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
-    padding: 8px 18px;
+    padding: 6px 12px;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
@@ -346,8 +346,8 @@ body {
     color: #000;
     border-color: #fff;
     outline: none;
-    transform: scale(1.05);
-    box-shadow: 0 4px 15px rgba(255,255,255,0.3);
+    transform: scale(1.02);
+    box-shadow: 0 4px 10px rgba(255,255,255,0.25);
 }
 
 .nav-item:hover, .nav-item.active {
@@ -360,8 +360,8 @@ body {
     background: #fff;
     color: #000;
     border-color: #fff;
-    transform: scale(1.05);
-    box-shadow: 0 4px 15px rgba(255,255,255,0.3);
+    transform: scale(1.02);
+    box-shadow: 0 4px 10px rgba(255,255,255,0.25);
 }
 
 .icon-btn {
@@ -382,12 +382,14 @@ body {
 
 /* Área de Scroll */
 .home-scroll-area {
+    position: relative;
     width: 100%;
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     scroll-behavior: smooth;
-    padding-top: 110px; /* Compensa o header fixo de 110px */
+    padding-top: 0; /* Remove compensation so banner starts behind top-nav */
+    padding-bottom: 30px;
 }
 
 /* =========================================
@@ -602,12 +604,25 @@ body {
 }
 
 .fs-control-btn:focus {
-    outline: 2px solid white;
-    outline-offset: 4px;
-    background-color: rgba(255, 255, 255, 0.2);
+    outline: none;
+    background-color: #f39c12 !important;
+    color: #000000 !important;
+    transform: scale(1.15);
+    box-shadow: 0 0 15px rgba(243, 156, 18, 0.6);
     border-radius: 50%;
-    transform: scale(1.1);
     transition: all 0.2s ease;
+}
+.fs-control-btn:focus svg {
+    stroke: #000000 !important;
+}
+.fs-control-btn:focus svg[fill="currentColor"] {
+    fill: #000000 !important;
+}
+.fs-control-btn:focus svg path {
+    fill: #000000 !important;
+}
+.fs-control-btn:focus text {
+    fill: #000000 !important;
 }
 
 .hero-meta {
@@ -1391,10 +1406,13 @@ body {
 }
 
 .vod-modal-poster-img {
-    width: 250px;
+    width: 190px;
+    height: 285px;
+    flex-shrink: 0;
     border-radius: 12px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.8);
     object-fit: cover;
+    object-position: center top;
     border: 1px solid rgba(255,255,255,0.1);
 }
 
@@ -1922,25 +1940,28 @@ body {
 #dynamic-hero-banner {
     position: relative;
     width: 100%;
-    height: 480px;
+    height: 560px;
     overflow: hidden;
     background: #000;
 }
 
 .spotlight-backdrop {
     position: absolute;
-    inset: 0;
+    top: 0;
+    right: 0;
+    width: 68%; /* Alinha a imagem oficial mais para o lado direito */
+    height: 100%;
     background-size: cover;
     background-position: center top;
-    filter: blur(28px) brightness(0.35);
-    transform: scale(1.08);
+    filter: brightness(0.95); /* Imagem super brilhante e com alta fidelidade de cores */
     transition: background-image 0.8s ease;
 }
 
 .spotlight-gradient {
     position: absolute;
     inset: 0;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.7) 75%, #000 100%);
+    background: linear-gradient(to right, #000 0%, #000 32%, rgba(0, 0, 0, 0.6) 55%, rgba(0, 0, 0, 0.2) 75%, transparent 100%),
+                linear-gradient(to bottom, transparent 50%, rgba(0, 0, 0, 0.4) 75%, #000000 100%);
     z-index: 1;
 }
 
@@ -1951,7 +1972,7 @@ body {
     display: flex;
     align-items: center;
     gap: 48px;
-    padding: 0 72px;
+    padding: 110px 40px 0;
 }
 
 .spotlight-poster {
@@ -2034,12 +2055,13 @@ body {
     line-height: 1.65;
     color: rgba(255,255,255,0.7);
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 6;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
 
 .spotlight-progress-bar {
+    display: none;
     height: 2px;
     background: rgba(255,255,255,0.15);
     border-radius: 2px;
@@ -2058,7 +2080,7 @@ body {
     bottom: 20px;
     right: 72px;
     z-index: 3;
-    display: flex;
+    display: none;
     gap: 10px;
 }
 
@@ -2086,7 +2108,7 @@ body {
     border-radius: 50%;
     width: 44px;
     height: 44px;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     cursor: pointer;
@@ -2102,4 +2124,209 @@ body {
     from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
 }
+
+.spotlight-logo {
+    max-width: 420px;
+    max-height: 110px;
+    object-fit: contain;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+    align-self: flex-start;
+}
+
+/* Seções da Home (Novos Filmes/Séries) */
+.home-section {
+    padding: 24px 40px 30px;
+}
+
+.home-section-title {
+    font-size: 19px;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: 0.5px;
+}
+
+.section-icon {
+    width: 20px;
+    height: 20px;
+    stroke: #f39c12;
+}
+
+.home-row {
+    display: flex;
+    align-items: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 20px;
+    padding: 10px 0;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+}
+
+.home-row::-webkit-scrollbar {
+    display: none;
+}
+
+.home-row .vod-item {
+    flex: 0 0 190px;
+    width: 190px;
+    height: 285px;
+    padding-top: 0;
+}
+
+.home-row::after {
+    content: '';
+    flex: 0 0 40px;
+    height: 1px;
+}
+
+/* Cabeçalho da Busca */
+.search-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    align-self: flex-start;
+}
+
+.search-back-round-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: none;
+    color: #000000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.search-back-round-btn:focus {
+    background: #f39c12;
+    color: #ffffff;
+    transform: scale(1.1);
+    box-shadow: 0 0 0 4px rgba(243, 156, 18, 0.4);
+}
+
+.search-header-title {
+    color: #ffffff;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+/* Override padding-top in fullscreen mode to display 16:9 natively stretched */
+.live-player-container:fullscreen {
+    padding-top: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+    background-color: #000 !important;
+}
+.live-player-container:fullscreen video {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+}
+
+.live-player-container:-webkit-full-screen {
+    padding-top: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+    background-color: #000 !important;
+}
+.live-player-container:-webkit-full-screen video {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+}
+
+/* Season tabs and episode cards */
+.season-tab {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid transparent;
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.season-tab:focus, .season-tab.active {
+    background: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+    transform: scale(1.05);
+    outline: none;
+}
+.episode-card {
+    position: relative;
+    flex: 0 0 220px;
+    width: 220px;
+    height: 130px;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #111;
+    border: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+.episode-card:focus {
+    border-color: #ffffff;
+    box-shadow: 0 10px 25px rgba(255, 255, 255, 0.25);
+    transform: scale(1.04);
+    outline: none;
+    z-index: 10;
+}
+.episode-card-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.episode-card-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 6px;
+    border-radius: 4px;
+    z-index: 2;
+}
+.episode-card-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.95) 45%);
+    color: white;
+    padding: 12px 10px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 3;
+}
+
 

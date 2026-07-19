@@ -1,8 +1,6 @@
 package com.black.pro.util
 
 import android.content.Context
-import com.black.pro.data.model.Movie
-import com.black.pro.data.model.Series
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 

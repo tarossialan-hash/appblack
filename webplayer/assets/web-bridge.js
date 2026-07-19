@@ -260,26 +260,89 @@ class WebBridge {
         const realUrl = `${this.serverUrl}/series/${this.username}/${this.password}/${streamId}.${extension}`;
         return `${window.location.origin}/proxy-stream?url=${encodeURIComponent(realUrl)}`;
     }
+
+    getSeriesInfo(seriesId) {
+        this._apiCall('get_series_info', { series_id: seriesId }).then(data => {
+            if (data && data.episodes) {
+                if (typeof onSeriesInfoLoaded === 'function') {
+                    onSeriesInfoLoaded(JSON.stringify(data));
+                }
+            } else {
+                this._sendMockSeriesInfo(seriesId);
+            }
+        }).catch(() => {
+            this._sendMockSeriesInfo(seriesId);
+        });
+    }
+
+    _sendMockSeriesInfo(seriesId) {
+        if (typeof onSeriesInfoLoaded === 'function') {
+            const mock = {
+                episodes: {
+                    "1": [
+                        { id: "101", episode_num: 1, title: "O Começo de Tudo", container_extension: "mp4", info: { duration: "45m", movie_image: "" } },
+                        { id: "102", episode_num: 2, title: "A Primeira Regra", container_extension: "mp4", info: { duration: "43m", movie_image: "" } },
+                        { id: "103", episode_num: 3, title: "O Desafio", container_extension: "mp4", info: { duration: "44m", movie_image: "" } }
+                    ],
+                    "2": [
+                        { id: "201", episode_num: 1, title: "Temporada 2 - Piloto", container_extension: "mp4", info: { duration: "45m", movie_image: "" } },
+                        { id: "202", episode_num: 2, title: "Consequências", container_extension: "mp4", info: { duration: "42m", movie_image: "" } }
+                    ]
+                }
+            };
+            onSeriesInfoLoaded(JSON.stringify(mock));
+        }
+    }
     
     getBannerItems() {
-        console.log("🌐 WebBridge: Buscando filmes reais do TMDB via proxy...");
-        fetch('/api/tmdb/now-playing')
-            .then(r => r.json())
-            .then(data => {
-                if (data && Array.isArray(data) && data.length > 0) {
-                    console.log("🌐 WebBridge: Filmes reais do TMDB obtidos com sucesso.");
+        console.log("🌐 WebBridge: Buscando banner dos últimos filmes adicionados...");
+        this.preloadSearchData().then(() => {
+            if (!this.movies || this.movies.length === 0) {
+                this._sendMockBanner();
+                return;
+            }
+
+            // Ordena por id decrescente para pegar os últimos e remove duplicados por nome limpo
+            const seen = new Set();
+            const sortedUnique = [];
+            const sorted = [...this.movies].sort((a, b) => b.id - a.id);
+            
+            for (const m of sorted) {
+                const clean = m.name.toLowerCase().trim()
+                    .replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, '')
+                    .replace(/\b(4k|fhd|uhd|1080p|720p|leg|dub|dublado|legendado)\b/g, '')
+                    .trim();
+                if (!seen.has(clean)) {
+                    seen.add(clean);
+                    sortedUnique.push(m);
+                }
+                if (sortedUnique.length >= 10) break;
+            }
+
+            // Para cada um, busca os detalhes no TMDB
+            const promises = sortedUnique.map(m => {
+                const cleanTitle = m.name
+                    .replace(/\[LEG]|\[DUB]|\(Legendado\)|\(Dublado\)|H.264|H.265|4K|1080P|720P|WEB-DL|BLURAY/gi, '')
+                    .replace(/\b(19|20)\d{2}\b/g, '')
+                    .trim();
+                return fetch(`/api/tmdb/search?query=${encodeURIComponent(cleanTitle)}`)
+                    .then(r => r.json())
+                    .catch(() => null);
+            });
+
+            Promise.all(promises).then(results => {
+                const valid = results.filter(r => r !== null && r.backdropUrl);
+                if (valid.length > 0) {
                     if (typeof onBannerItemsLoaded === 'function') {
-                        onBannerItemsLoaded(JSON.stringify(data));
+                        onBannerItemsLoaded(JSON.stringify(valid));
                     }
                 } else {
-                    console.warn("🌐 WebBridge: API TMDB retornou vazia, usando fallback.");
                     this._sendMockBanner();
                 }
-            })
-            .catch(err => {
-                console.error("🌐 WebBridge: Erro ao buscar TMDB, usando fallback:", err);
-                this._sendMockBanner();
             });
+        }).catch(() => {
+            this._sendMockBanner();
+        });
     }
 
     _sendMockBanner() {
@@ -396,6 +459,66 @@ class WebBridge {
                 }, 500);
             }
         }, 300);
+    }
+
+    getRecentMovies() {
+        if (this.movies) {
+            const sorted = [...this.movies].sort((a, b) => b.id - a.id).slice(0, 15);
+            const mapped = sorted.map(m => ({
+                streamId: m.id,
+                name: m.name,
+                streamIcon: m.streamIcon,
+                rating: m.rating
+            }));
+            if (typeof onRecentMoviesLoaded === 'function') {
+                onRecentMoviesLoaded(JSON.stringify(mapped));
+            }
+        } else {
+            this.preloadSearchData().then(() => {
+                if (this.movies) {
+                    const sorted = [...this.movies].sort((a, b) => b.id - a.id).slice(0, 15);
+                    const mapped = sorted.map(m => ({
+                        streamId: m.id,
+                        name: m.name,
+                        streamIcon: m.streamIcon,
+                        rating: m.rating
+                    }));
+                    if (typeof onRecentMoviesLoaded === 'function') {
+                        onRecentMoviesLoaded(JSON.stringify(mapped));
+                    }
+                }
+            });
+        }
+    }
+
+    getRecentSeries() {
+        if (this.series) {
+            const sorted = [...this.series].sort((a, b) => b.id - a.id).slice(0, 15);
+            const mapped = sorted.map(s => ({
+                seriesId: s.id,
+                name: s.name,
+                cover: s.streamIcon,
+                rating: s.rating
+            }));
+            if (typeof onRecentSeriesLoaded === 'function') {
+                onRecentSeriesLoaded(JSON.stringify(mapped));
+            }
+        } else {
+            this.preloadSearchData().then(() => {
+                if (this.series) {
+                    const sorted = [...this.series].sort((a, b) => b.id - a.id).slice(0, 15);
+                    const mapped = sorted.map(s => ({
+                        seriesId: s.id,
+                        name: s.name,
+                        cover: s.streamIcon,
+                        rating: s.rating
+                    }));
+                    if (typeof onRecentSeriesLoaded === 'function') {
+                        onRecentSeriesLoaded(JSON.stringify(mapped));
+                    }
+                }
+            });
+        }
     }
 
     getAppVersion() {
