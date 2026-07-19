@@ -884,6 +884,10 @@ function openVodModal(item, isSeries) {
     window._vodDetailSeries  = isSeries;
     window.currentTmdb       = null;
 
+    // Salva em localStorage pra manter estado no F5
+    localStorage.setItem('vodDetailItem', JSON.stringify(item));
+    localStorage.setItem('vodDetailIsSeries', isSeries ? '1' : '0');
+
     // Reseta a tela
     if (loader)   loader.style.display   = 'block';
     if (backdrop) backdrop.style.backgroundImage = '';
@@ -1065,6 +1069,10 @@ function closeVodModal() {
     if (topNav && window._detailPrevTopNavDisplay !== undefined) {
         topNav.style.display = window._detailPrevTopNavDisplay;
     }
+
+    // Limpa o estado do detalhe do localStorage
+    localStorage.removeItem('vodDetailItem');
+    localStorage.removeItem('vodDetailIsSeries');
 
     // Devolve o foco para o elemento que abriu a tela
     if (window._lastFocusedVodItem && typeof window._lastFocusedVodItem.focus === 'function') {
@@ -1666,9 +1674,33 @@ function voltarParaInicio(e) {
 // Auto-login se já estiver salvo no navegador (para testes web com F5 ou botão Recarregar)
 window.addEventListener('DOMContentLoaded', () => {
     const savedUser = localStorage.getItem('logged_in_user');
+    const savedItem = localStorage.getItem('vodDetailItem');
+
+    // Se tem detalhe salvo, só restaura detalhe (F5 na página de detalhe)
+    // Se não tem detalhe, faz sync completo (primeira vez ou login)
     if (savedUser) {
-        // Sincroniza automaticamente ao abrir o app
-        recarregar();
+        if (savedItem) {
+            // F5 na página de detalhe - só restaura o detalhe, sem sync
+            const usernameInput = document.getElementById('username');
+            const loginScreen = document.getElementById('login-screen');
+            const homeScreen = document.getElementById('home-screen');
+            if (loginScreen) loginScreen.style.display = 'none';
+            if (homeScreen) homeScreen.style.display = 'block';
+
+            setTimeout(() => {
+                try {
+                    const item = JSON.parse(savedItem);
+                    const isSeries = localStorage.getItem('vodDetailIsSeries') === '1';
+                    openVodModal(item, isSeries);
+                } catch (e) {
+                    localStorage.removeItem('vodDetailItem');
+                    localStorage.removeItem('vodDetailIsSeries');
+                }
+            }, 300);
+        } else {
+            // Primeira vez ou login - sincroniza completo
+            recarregar();
+        }
     } else {
         setTimeout(() => {
             const usernameInput = document.getElementById('username');

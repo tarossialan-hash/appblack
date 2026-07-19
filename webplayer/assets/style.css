@@ -2329,4 +2329,253 @@ body {
     z-index: 3;
 }
 
+/* =======================================================
+   VOD DETAIL SCREEN - Refined Layout (CSS Only)
+   ======================================================= */
+
+#vod-detail-screen {
+    padding-top: 0 !important;
+}
+
+/* Breadcrumb using CSS before */
+#vod-detail-screen::before {
+    content: "◄ Voltar";
+    display: block;
+    padding: 20px 40px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 13px;
+    background: rgba(0, 0, 0, 0.3);
+    font-weight: 500;
+}
+
+#vod-detail-hero {
+    background: linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(20,20,20,0.4) 100%) !important;
+}
+
+#vod-detail-poster {
+    width: 220px !important;
+    height: 330px !important;
+    border-radius: 14px !important;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(243, 156, 18, 0.1) !important;
+    border: 1px solid rgba(243, 156, 18, 0.2) !important;
+}
+
+#vod-detail-title {
+    font-size: 52px !important;
+    font-weight: 950 !important;
+    letter-spacing: -1px;
+    color: #fff !important;
+    line-height: 1 !important;
+}
+
+#vod-detail-original {
+    font-size: 15px !important;
+    color: rgba(255, 255, 255, 0.5) !important;
+    font-weight: 400;
+    margin-top: 8px !important;
+}
+
+/* Estiliza botões */
+#vod-detail-hero .vod-btn {
+    padding: 13px 32px !important;
+    font-weight: 600;
+    font-size: 15px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+#vod-detail-hero .vod-btn.primary {
+    background: #f39c12 !important;
+    color: #000 !important;
+}
+
+#vod-detail-hero .vod-btn.primary:hover {
+    background: #ffb13d !important;
+    transform: translateY(-2px);
+}
+
+#vod-detail-hero .vod-btn.secondary {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #fff !important;
+}
+
+#vod-detail-hero .vod-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Metadata cards */
+#vod-detail-meta {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 12px !important;
+    margin-top: 16px !important;
+}
+
+#vod-detail-meta span {
+    background: rgba(243, 156, 18, 0.1) !important;
+    border: 1px solid rgba(243, 156, 18, 0.2) !important;
+    padding: 8px 14px !important;
+    border-radius: 6px !important;
+    font-size: 12px !important;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8) !important;
+    display: flex !important;
+    align-items: center;
+    gap: 6px !important;
+}
+
+/* Overview/Sinopse section */
+#vod-detail-overview-box {
+    background: linear-gradient(135deg, rgba(243, 156, 18, 0.05) 0%, rgba(100, 50, 20, 0.05) 100%) !important;
+    border: 1px solid rgba(243, 156, 18, 0.15) !important;
+    border-radius: 12px !important;
+    padding: 20px 24px !important;
+    margin: 24px 0 !important;
+}
+
+#vod-detail-overview {
+    font-size: 14px !important;
+    line-height: 1.7 !important;
+    color: #d8d8d8 !important;
+}
+
+/* Credits section */
+#vod-detail-credits {
+    margin-top: 20px !important;
+    padding-top: 20px !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+    font-size: 13px !important;
+    line-height: 1.8;
+}
+
+#vod-detail-credits div {
+    color: rgba(255, 255, 255, 0.7) !important;
+    margin-bottom: 8px;
+}
+
+/* Section titles */
+#vod-detail-series-section h3,
+#vod-detail-related-section h3 {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    letter-spacing: 2px;
+    color: #f39c12 !important;
+    text-transform: uppercase;
+    margin-bottom: 20px !important;
+}
+
+/* Season tabs styling */
+.season-tab {
+    padding: 11px 22px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 6px !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.season-tab:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(243, 156, 18, 0.3) !important;
+}
+
+.season-tab.active {
+    background: #f39c12 !important;
+    color: #000 !important;
+    border-color: #f39c12 !important;
+}
+
+/* Episode cards */
+.episode-card {
+    background: rgba(0, 0, 0, 0.4) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.episode-card:hover {
+    border-color: rgba(243, 156, 18, 0.3) !important;
+    transform: translateY(-4px);
+    box-shadow: 0 10px 25px rgba(243, 156, 18, 0.15);
+}
+
+.episode-card-badge {
+    background: #f39c12 !important;
+    color: #000 !important;
+    font-weight: 600;
+}
+
+/* Related/Recently added cards */
+.vod-item {
+    border-radius: 10px !important;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.vod-item:hover {
+    transform: translateY(-6px);
+    border-color: rgba(243, 156, 18, 0.3);
+    box-shadow: 0 15px 40px rgba(243, 156, 18, 0.2);
+}
+
+/* Season Tabs */
+.season-tab {
+    padding: 12px 24px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.season-tab:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.season-tab.active {
+    background: #f39c12;
+    color: #000;
+    border-color: #f39c12;
+}
+
+/* Episode Cards */
+.episode-card {
+    min-width: 160px;
+    height: 240px;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.episode-card:hover {
+    transform: translateY(-4px);
+}
+
+.episode-card-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #f39c12;
+    color: #000;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.episode-card-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+    color: #fff;
+    padding: 40px 12px 12px;
+    font-size: 13px;
+}
 
