@@ -385,27 +385,6 @@
         </div>
     </div>
 
-    <!-- Modal de Atualização -->
-    <div id="update-confirm-modal" class="vod-modal" style="display: none;">
-        <div class="exit-modal-content">
-            <h3 class="exit-modal-title">Nova versão disponível! (<span id="update-version-name">1.0.1</span>)</h3>
-            <p style="color: #bbb; font-size: 14px; margin: -10px 0 10px 0;">Deseja atualizar o aplicativo para a nova versão?</p>
-            <div id="update-modal-buttons" class="exit-modal-buttons">
-                <button id="update-btn-yes" class="vod-btn primary" onclick="iniciarAtualizacao()" tabindex="0">Atualizar</button>
-                <button id="update-btn-no" class="vod-btn secondary" onclick="fecharUpdateModal()" tabindex="0">Depois</button>
-            </div>
-            <div id="update-progress-container" style="display: none; flex-direction: column; gap: 8px; width: 100%;">
-                <div style="display: flex; justify-content: space-between; color: #fff; font-size: 14px;">
-                    <span>Baixando atualização...</span>
-                    <span id="update-progress-text">0%</span>
-                </div>
-                <div style="width: 100%; height: 8px; background: #333; border-radius: 4px; overflow: hidden;">
-                    <div id="update-progress-bar" style="width: 0%; height: 100%; background: #f39c12; transition: width 0.1s ease;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
     
     <!-- Teclado Virtual (OSK) -->
     <div id="virtual-keyboard" class="vk-container" style="display: none;">

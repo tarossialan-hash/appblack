@@ -138,11 +138,6 @@ function recarregar() {
     document.getElementById("sync-status-text").innerText = "Sincronizando banco de dados...";
     document.getElementById("sync-progress").style.width = "0%";
     
-    // Verifica atualizações ao mesmo tempo
-    if (window.AndroidApp && typeof window.AndroidApp.checkForUpdates === 'function') {
-        window.AndroidApp.checkForUpdates();
-    }
-    
     if (window.AndroidApp && user && pass) {
         window.AndroidApp.login(user, pass);
     } else {
@@ -1689,12 +1684,6 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Verifica atualizações ao abrir o app
-    setTimeout(() => {
-        if (window.AndroidApp && typeof window.AndroidApp.checkForUpdates === 'function') {
-            window.AndroidApp.checkForUpdates();
-        }
-    }, 1000);
 });
 
 // ==========================================
@@ -2322,73 +2311,4 @@ function confirmarSaida() {
 // =======================================================
 // AUTO-UPDATE MODAL LOGIC
 // =======================================================
-let currentApkUrl = "";
-let lastFocusedBeforeUpdate = null;
-
-function showUpdateModal(versionName, apkUrl) {
-    currentApkUrl = apkUrl;
-    lastFocusedBeforeUpdate = document.activeElement;
-    
-    const modal = document.getElementById('update-confirm-modal');
-    const verSpan = document.getElementById('update-version-name');
-    if (modal) {
-        if (verSpan) verSpan.innerText = versionName;
-        
-        // Garante que os botões estão visíveis e a barra escondida
-        document.getElementById('update-modal-buttons').style.display = 'flex';
-        document.getElementById('update-progress-container').style.display = 'none';
-        
-        modal.style.display = 'flex';
-        setTimeout(() => modal.classList.add('show'), 10);
-        
-        // Foca no botão "Atualizar" por padrão
-        setTimeout(() => {
-            const btnYes = document.getElementById('update-btn-yes');
-            if (btnYes) btnYes.focus();
-        }, 100);
-    }
-}
-
-function fecharUpdateModal() {
-    const modal = document.getElementById('update-confirm-modal');
-    if (modal) {
-        modal.classList.remove('show');
-        setTimeout(() => {
-            modal.style.display = 'none';
-            if (lastFocusedBeforeUpdate) {
-                lastFocusedBeforeUpdate.focus();
-                lastFocusedBeforeUpdate = null;
-            }
-        }, 300);
-    }
-}
-
-function iniciarAtualizacao() {
-    if (currentApkUrl && window.AndroidApp && typeof window.AndroidApp.downloadAndInstallApk === 'function') {
-        // Esconde os botões e mostra a barra de progresso
-        document.getElementById('update-modal-buttons').style.display = 'none';
-        document.getElementById('update-progress-container').style.display = 'flex';
-        
-        // Executa o download nativo
-        window.AndroidApp.downloadAndInstallApk(currentApkUrl);
-    }
-}
-
-function updateDownloadProgress(percent) {
-    const pText = document.getElementById('update-progress-text');
-    const pBar = document.getElementById('update-progress-bar');
-    if (pText) pText.innerText = percent + "%";
-    if (pBar) pBar.style.width = percent + "%";
-}
-
-function onUpdateError(errorMsg) {
-    alert("Erro na atualização: " + errorMsg);
-    // Restaura os botões caso ocorra falha
-    document.getElementById('update-modal-buttons').style.display = 'flex';
-    document.getElementById('update-progress-container').style.display = 'none';
-    setTimeout(() => {
-        const btnYes = document.getElementById('update-btn-yes');
-        if (btnYes) btnYes.focus();
-    }, 100);
-}
 
