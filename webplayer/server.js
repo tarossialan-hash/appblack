@@ -99,7 +99,7 @@ app.get('/api/tmdb/now-playing', async (req, res) => {
 
         res.json(complete);
     } catch (err) {
-        console.error('TMDB Error:', err.message);
+        console.error('TMDB Error: Failed to fetch trending movies');
         res.json([]);
     }
 });
@@ -130,7 +130,7 @@ app.get('/api/tmdb/search', async (req, res) => {
                 logoUrl = `https://image.tmdb.org/t/p/w500${bestLogo.file_path}`;
             }
         } catch (err) {
-            console.error(`Error logo:`, err.message);
+            console.error('Error fetching logo data');
         }
 
         res.json({
@@ -144,47 +144,85 @@ app.get('/api/tmdb/search', async (req, res) => {
             voteAverage: result.vote_average ? result.vote_average : 0
         });
     } catch (err) {
-        console.error('Search TMDB Error:', err.message);
+        console.error('Search TMDB Error: Failed to search TMDB');
         res.json(null);
     }
 });
 
 // Proxy para a API JSON do Xtream
+function isValidXtreamUrl(serverUrl) {
+    try {
+        const url = new URL(serverUrl);
+        // Only allow http/https
+        if (!['http:', 'https:'].includes(url.protocol)) return false;
+        // Reject private/internal IPs
+        const hostname = url.hostname;
+        if (['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(hostname)) return false;
+        if (hostname.startsWith('10.') || hostname.startsWith('172.16.') || hostname.startsWith('192.168.')) return false;
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 app.post('/api/xtream', async (req, res) => {
     const { serverUrl, username, password, action, extraParams } = req.body;
-    
+
     if (!serverUrl || !username || !password) {
         return res.status(400).json({ error: 'Missing credentials' });
     }
-    
+
+    if (!isValidXtreamUrl(serverUrl)) {
+        return res.status(400).json({ error: 'Invalid server URL' });
+    }
+
     try {
         let target = `${serverUrl}/player_api.php?username=${username}&password=${password}`;
         if (action) target += `&action=${action}`;
-        
+
         if (extraParams) {
             const params = new URLSearchParams(extraParams);
             target += `&${params.toString()}`;
         }
-        
+
         const response = await axios.get(target);
         res.json(response.data);
     } catch (error) {
-        console.error('API Error:', error.message);
+        console.error('API Error: Failed to fetch from Xtream API');
         res.status(500).json({ error: 'Failed to fetch from Xtream API' });
     }
 });
+
+function isValidStreamUrl(streamUrl) {
+    try {
+        const url = new URL(streamUrl);
+        // Only allow http/https
+        if (!['http:', 'https:'].includes(url.protocol)) return false;
+        // Reject private/internal IPs
+        const hostname = url.hostname;
+        if (['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(hostname)) return false;
+        if (hostname.startsWith('10.') || hostname.startsWith('172.16.') || hostname.startsWith('192.168.')) return false;
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
 
 app.get('/proxy-stream', async (req, res) => {
     const streamUrl = req.query.url;
     if (!streamUrl) {
         return res.status(400).send('Missing url parameter');
     }
-    
+
+    if (!isValidStreamUrl(streamUrl)) {
+        return res.status(403).send('Invalid or restricted URL');
+    }
+
     const headers = {};
     if (req.headers.range) {
         headers['Range'] = req.headers.range;
     }
-    
+
     try {
         const response = await axios({
             method: 'get',
@@ -194,10 +232,10 @@ app.get('/proxy-stream', async (req, res) => {
             timeout: 15000,
             validateStatus: (status) => status >= 200 && status < 300
         });
-        
+
         res.set('Access-Control-Allow-Origin', '*');
         res.set('Accept-Ranges', 'bytes');
-        
+
         if (response.headers['content-type']) {
             res.set('Content-Type', response.headers['content-type']);
         }
@@ -207,16 +245,16 @@ app.get('/proxy-stream', async (req, res) => {
         if (response.headers['content-length']) {
             res.set('Content-Length', response.headers['content-length']);
         }
-        
+
         res.status(response.status);
         response.data.pipe(res);
-        
+
         req.on('close', () => {
             response.data.destroy();
         });
-        
+
     } catch (error) {
-        console.error('Stream Proxy Error:', error.message);
+        console.error('Stream Proxy Error: Failed to fetch stream');
         try {
             const fallbackResponse = await axios({
                 method: 'get',
