@@ -1,3 +1,90 @@
+/* ---------- ESCALA DA TV ----------
+   A UI é desenhada em 1280px de largura (#tv-canvas) e escalada até encher a
+   largura da tela. A altura do canvas é derivada: altura_real / escala.
+
+   Escalar pelos dois eixos com fatores diferentes encheria a tela, mas
+   distorceria — foi o que deixou a imagem espremida na TV de 32". Aqui o fator
+   é único (proporção intacta) e quem absorve a diferença de proporção é o
+   espaço vertical do canvas, que cresce ou encolhe conforme o painel.
+
+   16:9  -> 1280x720 exato, a medida em que o CSS foi desenhado
+   4:3   -> 1280x960, sobra altura (mais fileiras visíveis)
+   21:9  -> 1280x540, falta altura (o hero encolhe via min() no CSS) */
+const TV_LARGURA = 1280;
+
+function ajustarEscalaTv() {
+    if (!document.getElementById('tv-canvas')) return;
+
+    // clientWidth ignora a barra de rolagem; innerWidth é o fallback
+    const dispW = document.documentElement.clientWidth || window.innerWidth;
+    const dispH = document.documentElement.clientHeight || window.innerHeight;
+    if (!dispW || !dispH) return;
+
+    const escala = dispW / TV_LARGURA;
+    const raiz = document.documentElement.style;
+    raiz.setProperty('--tv-scale', String(escala));
+    // Altura em unidades do canvas: ao ser escalada, dá exatamente dispH
+    raiz.setProperty('--tv-h', (dispH / escala) + 'px');
+}
+
+ajustarEscalaTv();
+window.addEventListener('resize', ajustarEscalaTv);
+window.addEventListener('orientationchange', ajustarEscalaTv);
+
+/* A cortina "CARREGANDO SUA HOME" que existia aqui foi removida: era
+   redundante. O passo de 85% da sincronização já mostra "Organizando sua
+   Home..." E, mais importante, é esse passo que chama fetchBannerData() — os
+   destaques já estão prontos quando a home aparece, então não havia espera a
+   cobrir. Duas cortinas seguidas para o mesmo momento. */
+
+/* ---------- RASCUNHO DO LOGIN ----------
+   O app se encerra por completo ao ir para a Home (finishAndRemoveTask, para
+   soltar o decodificador de vídeo). Quem estava no meio do login perdia o que
+   já tinha digitado e recomeçava do zero.
+
+   Só o usuário é guardado. A senha NÃO: localStorage é texto puro no
+   dispositivo, e guardar senha ali seria pior que o incômodo que resolve. A
+   senha só é persistida depois do login bem-sucedido, e aí pelo SessionManager,
+   que grava criptografado. */
+const CHAVE_RASCUNHO_USUARIO = 'rascunho_usuario';
+
+function iniciarRascunhoLogin() {
+    const campoUsuario = document.getElementById('username');
+    const campoSenha = document.getElementById('password');
+    if (!campoUsuario) return;
+
+    const salvo = localStorage.getItem(CHAVE_RASCUNHO_USUARIO) || '';
+
+    // Os campos são assumidos por completo: o que o navegador tiver
+    // autopreenchido é descartado. Vale só o nosso rascunho — e a senha nunca
+    // vem preenchida, nem do rascunho (ela não é guardada) nem do navegador.
+    const assumirCampos = () => {
+        campoUsuario.value = salvo;
+        if (campoSenha) campoSenha.value = '';
+    };
+    assumirCampos();
+
+    // O autofill do Chrome roda depois do load, então uma passada só não
+    // resolve. A segunda só acontece se o usuário ainda não digitou nada —
+    // senão apagaria o que ele acabou de escrever.
+    let usuarioDigitou = false;
+    const marcarDigitou = () => { usuarioDigitou = true; };
+    campoUsuario.addEventListener('input', marcarDigitou);
+    if (campoSenha) campoSenha.addEventListener('input', marcarDigitou);
+    setTimeout(() => { if (!usuarioDigitou) assumirCampos(); }, 300);
+
+    // 'input' cobre teclado do sistema e do PC; o teclado virtual da TV altera
+    // .value por código, que não dispara o evento — por isso ele salva à parte.
+    campoUsuario.addEventListener('input', () => {
+        localStorage.setItem(CHAVE_RASCUNHO_USUARIO, campoUsuario.value);
+    });
+}
+
+function salvarRascunhoUsuario() {
+    const campoUsuario = document.getElementById('username');
+    if (campoUsuario) localStorage.setItem(CHAVE_RASCUNHO_USUARIO, campoUsuario.value);
+}
+
 // Funções de Login
 function fazerLogin() {
     const user = document.getElementById("username").value;
@@ -56,6 +143,8 @@ function updateSyncProgress(percent, statusText) {
 
 function onLoginSuccess(username) {
     localStorage.setItem('logged_in_user', username);
+    // Entrou: o rascunho cumpriu o papel e não precisa mais existir
+    localStorage.removeItem(CHAVE_RASCUNHO_USUARIO);
     // Garante que o teclado virtual não fique aberto ao entrar na home
     const vkEl = document.getElementById('virtual-keyboard');
     if (vkEl) vkEl.style.display = 'none';
@@ -213,6 +302,10 @@ function recarregar() {
 }
 
 function buscar() {
+    // A busca também sai da TV ao vivo: sem isto o canal seguia tocando por
+    // trás da tela de busca, já que este caminho não passa por mostrarCategoria.
+    pararPlayerAoVivo();
+
     // Esconde todas as outras telas do app
     document.querySelector('.home-scroll-area').style.display = 'none';
     document.getElementById('live-tv-screen').style.display = 'none';
@@ -231,8 +324,14 @@ function buscar() {
     const topNav = document.querySelector('.top-nav');
     if (topNav) topNav.style.display = 'none';
 
-    // Foca na primeira tecla do teclado virtual
+    // Na TV o foco vai para a primeira tecla do teclado virtual; fora dela,
+    // direto para o campo, que é o que faz o teclado do aparelho subir.
     setTimeout(() => {
+        if (!USA_TECLADO_VIRTUAL) {
+            const campo = document.getElementById('search-input-field');
+            if (campo) campo.focus();
+            return;
+        }
         const firstKey = document.querySelector('.sk-key');
         if (firstKey) firstKey.focus();
     }, 100);
@@ -246,20 +345,10 @@ function fecharBusca() {
 function mostrarCategoria(btn, cat) {
     localStorage.setItem('current_category', cat);
     
-    // Para a reprodução do mini-player de TV ao Vivo ao sair da tela de canais
+    // Para tudo do ao vivo ao sair da aba de canais — inclusive a reconexão
+    // agendada, que antes ressuscitava o player 1,5s depois da troca de aba.
     if (cat !== 'tv') {
-        if (mpegtsPlayer) {
-            try { mpegtsPlayer.destroy(); } catch(e) {}
-            mpegtsPlayer = null;
-        }
-        const videoElement = document.getElementById('live-player');
-        if (videoElement) {
-            try {
-                videoElement.pause();
-                videoElement.removeAttribute('src');
-                videoElement.load();
-            } catch(e) {}
-        }
+        pararPlayerAoVivo();
     }
     
     // Oculta a tela de busca se estiver ativa
@@ -289,12 +378,15 @@ function mostrarCategoria(btn, cat) {
         if (window.AndroidApp) {
             // Android: só busca se o banner ainda não foi carregado
             if (!window._bannerLoaded) {
+
                 window.AndroidApp.getBannerItems();
                 if (typeof window.AndroidApp.getRecentMovies === 'function') {
                     window.AndroidApp.getRecentMovies();
+                } else {
                 }
                 if (typeof window.AndroidApp.getRecentSeries === 'function') {
                     window.AndroidApp.getRecentSeries();
+                } else {
                 }
                 window._bannerLoaded = true;
             }
@@ -332,6 +424,25 @@ function mostrarCategoria(btn, cat) {
         document.getElementById('live-player-overlay').style.display = 'flex';
         document.getElementById('live-player-loader').style.display = 'none';
         document.getElementById('live-player-title').innerText = "Selecione um canal";
+
+        // Zera a tela ANTES de pedir as categorias. O carregamento passa pelo
+        // Kotlin e volta assíncrono; sem limpar aqui, a aba reaparecia com a
+        // última categoria e seus canais ainda montados e, um instante depois,
+        // saltava para FAVORITOS quando a resposta chegava. Era esse salto que
+        // se via.
+        const colCategorias = document.querySelector('.live-col-categories');
+        if (colCategorias) colCategorias.innerHTML = '';
+        const colCanais = document.querySelector('.live-col-channels');
+        if (colCanais) colCanais.innerHTML = '';
+
+        const epgAntigo = document.getElementById('live-epg-list');
+        if (epgAntigo) epgAntigo.innerHTML = '';
+
+        // _ativos é declarado mais abaixo no arquivo, mas mostrarCategoria só
+        // roda a partir de interação — o script já avaliou por inteiro aqui.
+        _ativos.canal = null;
+        _ativos.categoriaTv = null;
+        _categoriaTvAtual = null;
         
         if (window.AndroidApp) {
             window.AndroidApp.getLiveCategories();
@@ -372,7 +483,9 @@ function mostrarCategoria(btn, cat) {
 function onBannerItemsLoaded(jsonString) {
     let items = [];
     try { items = JSON.parse(jsonString); } catch(e) {}
-    if (!items || items.length === 0) return;
+    if (!items || items.length === 0) {
+        return;
+    }
 
     // Remove duplicados por título limpo
     const seenTitles = new Set();
@@ -407,29 +520,50 @@ function onBannerItemsLoaded(jsonString) {
     }
 
     // Pré-valida imagens: descarta slides onde backdrop OU logo não carregam
+    // Numa TV com Wi-Fi instável o onload/onerror pode simplesmente nunca
+    // chegar. Sem prazo, a promessa fica pendente para sempre e o banner
+    // permanece preto indefinidamente.
+    const TIMEOUT_IMAGEM_MS = 6000;
+
     function preloadImage(url) {
         return new Promise(resolve => {
             if (!url) { resolve(false); return; }
             const img = new Image();
-            img.onload  = () => resolve(true);
-            img.onerror = () => resolve(false);
+            let resolvido = false;
+            const terminar = (ok) => {
+                if (resolvido) return;
+                resolvido = true;
+                clearTimeout(prazo);
+                img.onload = null;
+                img.onerror = null;
+                resolve(ok);
+            };
+            const prazo = setTimeout(() => terminar(false), TIMEOUT_IMAGEM_MS);
+            img.onload = () => terminar(true);
+            img.onerror = () => terminar(false);
             img.src = url;
         });
     }
 
     async function initWithValidation() {
-        const validItems = [];
-        for (const item of items) {
+        // Validação de todos os destaques em paralelo. Antes era um for...await:
+        // cada item só começava depois que o anterior terminasse, e o render só
+        // vinha no fim do laço — com 10 destaques eram 10 idas e voltas em fila
+        // e o banner ficava preto até a última responder. Em paralelo o tempo
+        // total passa a ser o do item mais lento, não a soma de todos.
+        const resultados = await Promise.all(items.map(async item => {
             const [backdropOk, logoOk] = await Promise.all([
                 preloadImage(item.backdropUrl),
                 preloadImage(item.logoUrl)
             ]);
-            if (backdropOk && logoOk) {
-                validItems.push(item);
-            }
-            if (validItems.length >= 6) break;
+            return (backdropOk && logoOk) ? item : null;
+        }));
+
+        // filter preserva a ordem original dos destaques
+        const validItems = resultados.filter(Boolean).slice(0, 6);
+        if (validItems.length === 0) {
+            return;
         }
-        if (validItems.length === 0) return;
         items = validItems;
         render(0);
     }
@@ -606,6 +740,7 @@ function onRecentMoviesLoaded(jsonString) {
 
         container.appendChild(div);
     });
+
 }
 
 // O provedor entrega capas do TMDB em w500/w600, mas o espaço na grade tem
@@ -664,51 +799,73 @@ function onRecentSeriesLoaded(jsonString) {
         
         container.appendChild(div);
     });
+
 }
 
 // ==============================================================================
 // CALLBACKS DA TV AO VIVO
 // ==========================================
+// Categoria sintética: não vem do provedor, é montada a partir do que o
+// usuário favoritou. Fica sempre no topo da coluna.
+const CATEGORIA_FAVORITOS = '__favoritos__';
+let _categoriaTvAtual = null;
+
 function onLiveCategoriesLoaded(jsonString) {
     let categories = [];
     try { categories = JSON.parse(jsonString); } catch(e) {}
-    
+
+    // Bloqueio adulto: filtra aqui, onde a categoria aparece pela primeira
+    // vez — sem categoria na tela nao ha caminho ate o conteudo.
+    categories = filtrarAdulto(categories);
+
     const container = document.querySelector('.live-col-categories');
     container.innerHTML = "";
-    
-    
-    categories.forEach((cat, index) => {
+
+    const criarItem = (nome, categoryId) => {
         const div = document.createElement('div');
         div.className = "live-category-item";
         div.tabIndex = 0;
-        div.innerText = cat.categoryName;
-        
+        div.innerText = nome;
+
         div.onclick = () => {
             marcarAtivo('categoriaTv', div);
+            _categoriaTvAtual = categoryId;
+
+            if (categoryId === CATEGORIA_FAVORITOS) {
+                if (window.AndroidApp && window.AndroidApp.getFavoriteChannels) {
+                    window.AndroidApp.getFavoriteChannels();
+                } else {
+                    onLiveChannelsLoaded('[]');
+                }
+                return;
+            }
+
             if (window.AndroidApp) {
-                window.AndroidApp.getLiveChannels(cat.categoryId);
+                window.AndroidApp.getLiveChannels(categoryId);
             } else {
-                onLiveChannelsLoaded(JSON.stringify([{streamId: 101, name: "Canal Mock " + cat.categoryName, icon: ""}]));
+                onLiveChannelsLoaded(JSON.stringify([{streamId: 101, name: "Canal Mock " + nome, icon: ""}]));
             }
         };
-        
+
         div.onkeydown = (e) => {
             if (e.key === "Enter") { e.preventDefault(); div.click(); }
         };
-        
+
         container.appendChild(div);
-    });
-    
-    // Auto-seleciona a primeira categoria
-    if (categories.length > 0) {
-        setTimeout(() => {
-            const firstCat = container.querySelector('.live-category-item');
-            if (firstCat) {
-                firstCat.focus();
-                firstCat.click();
-            }
-        }, 100);
-    }
+        return div;
+    };
+
+    const itemFavoritos = criarItem('FAVORITOS', CATEGORIA_FAVORITOS);
+    itemFavoritos.classList.add('categoria-favoritos');
+
+    categories.forEach(cat => criarItem(cat.categoryName, cat.categoryId));
+
+    // Abre sempre em FAVORITOS. Antes selecionava a primeira do provedor com
+    // um setTimeout de 100ms — prazo fixo que numa TV lenta às vezes corria
+    // contra a renderização e a tela abria sem nada selecionado. Agora é
+    // síncrono: o item acabou de ser inserido, então já existe.
+    itemFavoritos.click();
+    itemFavoritos.focus();
 }
 
 let _ultimaNavegacao = 0; // marca o instante da ultima navegacao por DPAD
@@ -738,7 +895,7 @@ function onLiveChannelsLoaded(jsonString) {
         
         let iconUrl = ch.streamIcon || ch.icon;
         let iconHtml = iconUrl ? `<img src="${iconUrl}" class="channel-logo" loading="lazy" decoding="async" onerror="this.style.display='none'">` : '';
-        div.innerHTML = `${iconHtml}<span>${ch.name}</span>`;
+        div.innerHTML = `${iconHtml}<span class="channel-name">${ch.name}</span>`;
         
         div.onclick = () => {
             if (div.classList.contains('active')) {
@@ -752,6 +909,9 @@ function onLiveChannelsLoaded(jsonString) {
             
             document.getElementById("live-player-title").innerText = ""; // sem rótulo sobre o vídeo (o elemento segue sendo usado para mensagens de erro)
             
+            // Já mostra logo e nome; a programação entra quando o EPG chegar
+            mostrarInfoCanal(ch, '');
+
             if (window.AndroidApp) {
                 window.AndroidApp.getEpg(ch.streamId);
                 let streamUrl = window.AndroidApp.getStreamUrl(ch.streamId);
@@ -765,18 +925,494 @@ function onLiveChannelsLoaded(jsonString) {
             }
         };
         
-        div.onkeydown = (e) => {
-            if (e.key === "Enter") {
-                // No Android TV o OK gera um click sintético além deste keydown.
-                // Sem o preventDefault o handler roda duas vezes: o 1º aperto
-                // ativava o canal e o 2º disparo já abria a tela cheia direto.
-                e.preventDefault();
-                div.click();
-            }
+        // Marca inicial de favorito (a estrela vem do CSS, via ::after — o
+        // conteúdo do item não muda)
+        if (window.AndroidApp && window.AndroidApp.isFavorite) {
+            try {
+                if (window.AndroidApp.isFavorite(ch.streamId, 'live')) {
+                    div.classList.add('is-favorito');
+                }
+            } catch (e) {}
+        }
+
+        // ── Favoritar segurando OK (ou clique longo no navegador) ──
+        // O toque curto continua abrindo o canal, como sempre foi.
+        let timerLongo = null;
+        let favoritouSegurando = false;
+
+        const iniciarPressao = () => {
+            favoritouSegurando = false;
+            clearTimeout(timerLongo);
+            // A barra que preenche avisa que segurar faz alguma coisa. Sem ela
+            // o gesto era invisível: o usuário segurava, nada reagia por 650ms
+            // e ele soltava antes de completar.
+            div.classList.add('segurando');
+            timerLongo = setTimeout(() => {
+                favoritouSegurando = true;
+                div.classList.remove('segurando');
+                alternarFavoritoCanal(div, ch);
+            }, MS_PRESSAO_LONGA);
         };
+        const soltarPressao = () => {
+            clearTimeout(timerLongo);
+            div.classList.remove('segurando');
+        };
+
+        div.onkeydown = (e) => {
+            if (e.key !== "Enter") return;
+            // No Android TV o OK gera um click sintético além deste keydown.
+            // Sem o preventDefault o handler roda duas vezes: o 1º aperto
+            // ativava o canal e o 2º disparo já abria a tela cheia direto.
+            e.preventDefault();
+            if (e.repeat) return; // segurando: só o primeiro evento conta
+            iniciarPressao();
+        };
+
+        div.onkeyup = (e) => {
+            if (e.key !== "Enter") return;
+            soltarPressao();
+            // Como o click sintético foi barrado no keydown, a abertura do
+            // canal acontece aqui — a não ser que a pressão longa já tenha
+            // favoritado, e aí soltar não deve abrir nada.
+            if (!favoritouSegurando) div.click();
+        };
+
+        // Mouse/toque (webplayer): mesma pressão longa
+        div.onmousedown = iniciarPressao;
+        div.onmouseup = soltarPressao;
+        div.onmouseleave = soltarPressao;
 
         container.appendChild(div);
     });
+
+    // Lista vazia precisa dizer o que fazer. Sem isto, abrir em FAVORITOS sem
+    // nada salvo mostrava só uma coluna em branco — nem dica, nem aviso.
+    if (channels.length === 0) {
+        const vazio = document.createElement('div');
+        vazio.className = 'lista-vazia';
+        vazio.textContent = _categoriaTvAtual === CATEGORIA_FAVORITOS
+            ? 'Nenhum canal favoritado ainda.\nSegure OK sobre um canal para favoritar.'
+            : 'Nenhum canal nesta categoria.';
+        container.appendChild(vazio);
+        return;
+    }
+
+}
+
+/* ==========================================================
+   CONFIGURAÇÕES
+   ========================================================== */
+
+const CHAVE_BLOQUEIO_ADULTO = 'bloqueio_adulto';
+
+// Termos que marcam categoria adulta. Comparação sem acento e em minúsculas.
+const TERMOS_ADULTO = ['adulto', 'adultos', 'xxx', 'porn', '+18', '18+', 'erotic', 'eroti', 'sexy'];
+
+function bloqueioAdultoLigado() {
+    return localStorage.getItem(CHAVE_BLOQUEIO_ADULTO) === '1';
+}
+
+/**
+ * Remove categorias adultas quando o bloqueio está ligado.
+ * Usado nas três listagens (ao vivo, filmes, séries) — é onde a categoria
+ * aparece pela primeira vez, então filtrar aqui já impede o acesso ao conteúdo.
+ */
+function filtrarAdulto(categorias) {
+    if (!bloqueioAdultoLigado()) return categorias;
+    return categorias.filter(cat => {
+        const nome = String(cat.categoryName || '')
+            .toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g, ''); // tira acentos
+        return !TERMOS_ADULTO.some(t => nome.includes(t));
+    });
+}
+
+function abrirConfiguracoes() {
+    const tela = document.getElementById('settings-screen');
+    if (!tela) return;
+
+    // Sai de qualquer reprodução: a tela cobre tudo, então deixar áudio
+    // tocando por trás seria o mesmo bug que corrigimos na troca de abas.
+    pararPlayerAoVivo();
+
+    tela.style.display = 'block';
+    selecionarAbaConfig('player');
+    sincronizarControlesConfig();
+
+    setTimeout(() => {
+        const primeira = tela.querySelector('.cfg-aba');
+        if (primeira) primeira.focus();
+    }, 60);
+}
+
+function fecharConfiguracoes() {
+    const tela = document.getElementById('settings-screen');
+    if (!tela) return;
+    tela.style.display = 'none';
+
+    // Devolve o foco para a barra superior, de onde a tela foi aberta
+    setTimeout(() => {
+        const ativo = document.querySelector('.nav-item.active') || document.querySelector('.nav-item');
+        if (ativo) ativo.focus();
+    }, 60);
+}
+
+function configuracoesAbertas() {
+    const tela = document.getElementById('settings-screen');
+    return !!(tela && tela.style.display !== 'none');
+}
+
+function selecionarAbaConfig(nome) {
+    const tela = document.getElementById('settings-screen');
+    if (!tela) return;
+
+    tela.querySelectorAll('.cfg-aba[data-aba]').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-aba') === nome);
+    });
+    tela.querySelectorAll('.cfg-painel').forEach(p => {
+        p.classList.toggle('active', p.getAttribute('data-painel') === nome);
+    });
+
+    // Cada aba busca o que precisa só ao ser aberta
+    if (nome === 'informacoes') carregarInfoAssinatura();
+    if (nome === 'atualizacao') {
+        const el = document.getElementById('cfg-versao-atual');
+        if (el) {
+            el.textContent = (window.AndroidApp && window.AndroidApp.getAppVersion)
+                ? window.AndroidApp.getAppVersion()
+                : '—';
+        }
+    }
+}
+
+/** Traz os controles para o estado que está realmente valendo. */
+function sincronizarControlesConfig() {
+    const formato = (window.AndroidApp && window.AndroidApp.getFormatoLive)
+        ? window.AndroidApp.getFormatoLive()
+        : (localStorage.getItem('formato_live') || 'ts');
+
+    document.querySelectorAll('.cfg-opcao[data-formato]').forEach(b => {
+        b.classList.toggle('selecionada', b.getAttribute('data-formato') === formato);
+    });
+
+    const nota = document.getElementById('cfg-nota-formato');
+    if (nota) {
+        nota.textContent = formato === 'm3u8'
+            ? 'HLS costuma reconectar melhor em rede instável. Alguns provedores não o liberam para todos os canais.'
+            : 'MPEGTS entra mais rápido e é o formato mais compatível. Padrão do aplicativo.';
+    }
+
+    const linha = document.getElementById('cfg-switch-adulto');
+    const estado = document.getElementById('cfg-adulto-estado');
+    const ligado = bloqueioAdultoLigado();
+    if (linha) linha.classList.toggle('ligado', ligado);
+    if (estado) estado.textContent = ligado ? 'Ligado' : 'Desligado';
+}
+
+function carregarInfoAssinatura() {
+    const grade = document.getElementById('cfg-info-grade');
+    if (!grade) return;
+    grade.innerHTML = '<div class="cfg-info-vazio">Carregando…</div>';
+
+    if (window.AndroidApp && window.AndroidApp.getUserInfo) {
+        window.AndroidApp.getUserInfo();
+    } else {
+        onUserInfoLoaded(JSON.stringify({ ok: false, erro: 'Indisponível neste modo.' }));
+    }
+}
+
+/** Chamado pelo Kotlin (e pelo WebBridge no navegador). */
+function onUserInfoLoaded(jsonString) {
+    const grade = document.getElementById('cfg-info-grade');
+    if (!grade) return;
+
+    let dados = {};
+    try { dados = JSON.parse(jsonString); } catch (e) {}
+
+    if (!dados || !dados.ok) {
+        grade.innerHTML = '<div class="cfg-info-vazio">' +
+            (dados && dados.erro ? dados.erro : 'Não foi possível carregar os dados.') + '</div>';
+        return;
+    }
+
+    const ativo = String(dados.status || '').toLowerCase() === 'active';
+    const item = (rotulo, valor, largo, classeValor) =>
+        '<div class="cfg-info-item' + (largo ? ' largo' : '') + '">' +
+            '<div class="cfg-info-rotulo">' + rotulo + '</div>' +
+            '<div class="cfg-info-valor' + (classeValor ? ' ' + classeValor : '') + '">' + (valor || '—') + '</div>' +
+        '</div>';
+
+    grade.innerHTML =
+        item('Usuário', dados.username) +
+        item('Status', dados.status, false, ativo ? 'ok' : '') +
+        item('Expiração', dados.expDate) +
+        item('Telas Contratadas', dados.maxConnections) +
+        item('Formatos Permitidos', dados.allowedFormats, true);
+}
+
+/* ---------- VERIFICAÇÃO DE ATUALIZAÇÃO ----------
+   Lê version.json na raiz do repo (raw do GitHub) e compara com a versão
+   instalada. Só avisa — não baixa nem instala nada. */
+const URL_VERSION_JSON = 'https://raw.githubusercontent.com/tarossialan-hash/appblack/main/version.json';
+
+function versaoInstalada() {
+    const v = (window.AndroidApp && window.AndroidApp.getAppVersion)
+        ? window.AndroidApp.getAppVersion() : '1.0.0';
+    // Guarda só os números: "1.0.0 (Web)" -> "1.0.0"
+    const m = String(v).match(/\d+(\.\d+)*/);
+    return m ? m[0] : '0';
+}
+
+/** >0 se a>b, <0 se a<b, 0 se iguais. Compara por segmento numérico. */
+function compararVersoes(a, b) {
+    const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+    const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+        const d = (pa[i] || 0) - (pb[i] || 0);
+        if (d !== 0) return d > 0 ? 1 : -1;
+    }
+    return 0;
+}
+
+function verificarAtualizacao() {
+    const status = document.getElementById('cfg-update-status');
+    const btn = document.getElementById('cfg-btn-verificar');
+    if (!status) return;
+
+    status.textContent = 'Verificando…';
+    if (btn) btn.classList.add('cfg-opcao-ocupada');
+
+    // cache-buster: o raw do GitHub cacheia por alguns minutos
+    fetch(URL_VERSION_JSON + '?t=' + Date.now(), { cache: 'no-store' })
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(dados => {
+            const remota = String(dados.version || '').trim();
+            const local = versaoInstalada();
+            if (!remota) throw new Error('sem versão');
+
+            if (compararVersoes(remota, local) > 0) {
+                const notas = dados.notes ? ' — ' + dados.notes : '';
+                status.textContent = `Nova versão disponível: ${remota} (instalada: ${local})${notas}`;
+                avisoRapido('Atualização disponível: ' + remota);
+            } else {
+                status.textContent = `Você está na versão mais recente (${local}).`;
+            }
+        })
+        .catch(() => {
+            status.textContent = 'Não foi possível verificar agora. Tente novamente.';
+        })
+        .finally(() => {
+            if (btn) btn.classList.remove('cfg-opcao-ocupada');
+        });
+}
+
+function iniciarConfiguracoes() {
+    const tela = document.getElementById('settings-screen');
+    if (!tela) return;
+
+    const btnVerificar = document.getElementById('cfg-btn-verificar');
+    if (btnVerificar) btnVerificar.onclick = verificarAtualizacao;
+
+    tela.querySelectorAll('.cfg-aba[data-aba]').forEach(botao => {
+        botao.onclick = () => selecionarAbaConfig(botao.getAttribute('data-aba'));
+    });
+
+    tela.querySelectorAll('.cfg-opcao[data-formato]').forEach(botao => {
+        botao.onclick = () => {
+            const formato = botao.getAttribute('data-formato');
+            if (window.AndroidApp && window.AndroidApp.setFormatoLive) {
+                window.AndroidApp.setFormatoLive(formato);
+            }
+            // Guarda também no JS: é a fonte usada quando não há ponte nativa
+            localStorage.setItem('formato_live', formato);
+            sincronizarControlesConfig();
+            avisoRapido(formato === 'm3u8' ? 'Player: HLS (M3U8)' : 'Player: MPEGTS (TS)');
+        };
+    });
+
+    const linhaAdulto = document.getElementById('cfg-switch-adulto');
+    if (linhaAdulto) {
+        linhaAdulto.onclick = () => {
+            const novo = !bloqueioAdultoLigado();
+            localStorage.setItem(CHAVE_BLOQUEIO_ADULTO, novo ? '1' : '0');
+            sincronizarControlesConfig();
+            avisoRapido(novo ? 'Bloqueio adulto ligado' : 'Bloqueio adulto desligado');
+        };
+    }
+
+    const btnDeslogar = document.getElementById('cfg-btn-deslogar');
+    if (btnDeslogar) btnDeslogar.onclick = () => { fecharConfiguracoes(); abrirLogoutModal(); };
+
+    const btnRetornar = document.getElementById('cfg-btn-retornar');
+    if (btnRetornar) btnRetornar.onclick = fecharConfiguracoes;
+
+    // Enter do D-pad: os itens são <button>, mas o preventDefault do handler
+    // global barra o clique sintético, então a ativação vem daqui.
+    tela.querySelectorAll('.cfg-aba, .cfg-opcao, .cfg-switch-linha').forEach(botao => {
+        botao.onkeydown = (e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            botao.click();
+        };
+    });
+}
+
+// Quanto tempo segurando OK para favoritar.
+// A barra só começa a preencher depois de MS_ATRASO_BARRA: num toque curto
+// (abrir o canal) ela nem chega a aparecer, que era o que dava a impressão de
+// que um clique simples já ia favoritar.
+const MS_ATRASO_BARRA = 300;
+const MS_PRESSAO_LONGA = 1300;
+
+// O CSS lê estes mesmos valores — assim o fim da animação coincide com o
+// disparo do favorito, em vez de dois números soltos que podem divergir.
+document.documentElement.style.setProperty('--atraso-barra', MS_ATRASO_BARRA + 'ms');
+document.documentElement.style.setProperty('--dur-barra', (MS_PRESSAO_LONGA - MS_ATRASO_BARRA) + 'ms');
+
+/* ---------- OVERLAY DE INFORMAÇÃO DO CANAL ----------
+   Aparece ao abrir o canal com logo, nome e o que está passando, e se apaga
+   sozinho. Fica dentro de .live-player-container, que já é position:relative e
+   vira tela cheia junto com o player — assim o overlay acompanha os dois
+   enquadramentos sem código extra.
+
+   Só opacidade e translateY são animados: são as duas propriedades que a GPU
+   compõe sem repintar. Nada de box-shadow ou filter aqui, que numa Smart TV
+   custam um repinte por quadro. */
+const MS_INFO_CANAL = 5000;
+let _canalAtual = null;
+let _timerInfoCanal = null;
+
+function elementoInfoCanal() {
+    let el = document.getElementById('canal-info-overlay');
+    if (el) return el;
+
+    const container = document.querySelector('.live-player-container');
+    if (!container) return null;
+
+    el = document.createElement('div');
+    el.id = 'canal-info-overlay';
+    el.innerHTML =
+        '<img class="ci-logo" alt="" onerror="this.style.display=\'none\'">' +
+        '<div class="ci-textos">' +
+            '<div class="ci-nome"></div>' +
+            '<div class="ci-programa"></div>' +
+        '</div>';
+    container.appendChild(el);
+    return el;
+}
+
+/**
+ * @param {object|null} ch       canal; null mantém o que já está exibido
+ * @param {string|undefined} programa  linha da programação; undefined não mexe
+ */
+function mostrarInfoCanal(ch, programa) {
+    const el = elementoInfoCanal();
+    if (!el) return;
+
+    if (ch) {
+        _canalAtual = ch;
+        const logo = el.querySelector('.ci-logo');
+        const url = ch.streamIcon || ch.icon || '';
+        if (url) {
+            logo.src = url;
+            logo.style.display = 'block';
+        } else {
+            logo.removeAttribute('src');
+            logo.style.display = 'none';
+        }
+        el.querySelector('.ci-nome').textContent = ch.name || '';
+    }
+
+    if (programa !== undefined) {
+        el.querySelector('.ci-programa').textContent = programa || '';
+    }
+
+    // Só aparece em tela cheia. No mini-player a faixa cobriria boa parte de
+    // uma imagem que já é pequena, e a informação está logo ali na lista.
+    // O conteúdo acima é atualizado de qualquer forma, para a faixa já entrar
+    // pronta quando o usuário expandir.
+    if (!playerEstaEmTelaCheia()) {
+        clearTimeout(_timerInfoCanal);
+        el.classList.remove('visivel');
+        return;
+    }
+
+    el.classList.add('visivel');
+    clearTimeout(_timerInfoCanal);
+    _timerInfoCanal = setTimeout(() => el.classList.remove('visivel'), MS_INFO_CANAL);
+}
+
+function esconderInfoCanal() {
+    clearTimeout(_timerInfoCanal);
+    const el = document.getElementById('canal-info-overlay');
+    if (el) el.classList.remove('visivel');
+    _canalAtual = null;
+}
+
+/**
+ * Aviso curto no canto da tela, some sozinho.
+ * Criado sob demanda e reaproveitado — o index.html não precisa conhecê-lo.
+ */
+function avisoRapido(texto) {
+    let el = document.getElementById('aviso-rapido');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'aviso-rapido';
+        (document.getElementById('tv-canvas') || document.body).appendChild(el);
+    }
+    el.textContent = texto;
+    el.classList.add('visivel');
+    clearTimeout(avisoRapido._timer);
+    avisoRapido._timer = setTimeout(() => el.classList.remove('visivel'), 2200);
+}
+
+/**
+ * Liga/desliga o canal nos favoritos. Retorna ao chamador nada — o estado novo
+ * vem do próprio Kotlin, que é a fonte da verdade.
+ */
+function alternarFavoritoCanal(div, ch) {
+    if (!window.AndroidApp || !window.AndroidApp.addFavorite) return;
+
+    let agoraFavorito = false;
+    try {
+        agoraFavorito = window.AndroidApp.addFavorite(JSON.stringify({
+            id: ch.streamId,
+            titulo: ch.name || '',
+            posterPath: ch.streamIcon || ch.icon || '',
+            tipo: 'live'
+        }));
+    } catch (e) {
+        return;
+    }
+
+    div.classList.toggle('is-favorito', !!agoraFavorito);
+
+    // Confirmação explícita: a estrela sozinha é pequena demais para ser notada
+    // numa TV a três metros de distância.
+    avisoRapido(agoraFavorito ? '★  Canal favoritado' : 'Removido dos favoritos');
+
+    // Pulso na estrela, para o olho ir até ela
+    if (agoraFavorito) {
+        div.classList.remove('favorito-pulso');
+        void div.offsetWidth; // reinicia a animação se favoritar em sequência
+        div.classList.add('favorito-pulso');
+    }
+
+    // Se o que está aberto é a própria lista de favoritos, desfavoritar tem
+    // que tirar o item da tela — senão fica um canal listado que já não é mais
+    // favorito.
+    if (!agoraFavorito && _categoriaTvAtual === CATEGORIA_FAVORITOS) {
+        div.remove();
+        const container = document.querySelector('.live-col-channels');
+        if (container && !container.querySelector('.live-channel-item')) {
+            container.innerHTML = '';
+            const vazio = document.createElement('div');
+            vazio.className = 'lista-vazia';
+            vazio.textContent = 'Nenhum canal favoritado ainda.\nSegure OK sobre um canal para favoritar.';
+            container.appendChild(vazio);
+        }
+    }
 }
 // ==========================================
 // VOD & Series Loaders
@@ -835,7 +1471,7 @@ async function fetchTmdbData(title, isSeries) {
             title:        result.title || result.name,
             originalTitle: details.original_title || details.original_name || null,
             overview:     result.overview,
-            backdropUrl:  result.backdrop_path  ? `https://image.tmdb.org/t/p/original${result.backdrop_path}` : null,
+            backdropUrl:  result.backdrop_path  ? `https://image.tmdb.org/t/p/w1280${result.backdrop_path}` : null,
             posterUrl:    result.poster_path    ? `https://image.tmdb.org/t/p/w500${result.poster_path}`       : null,
             logoUrl:      logo && logo.file_path ? `https://image.tmdb.org/t/p/w500${logo.file_path}`          : null,
             year:         rawDate ? rawDate.substring(0, 4) : null,
@@ -863,9 +1499,21 @@ function playFullscreenVideo(streamUrl, title) {
     if (fsContainer && fsPlayer) {
         window.isFullscreenLive = false;
         if (typeof updateFullscreenControlsVisibility === 'function') updateFullscreenControlsVisibility();
+
+        // Encerra QUALQUER decodificação em curso antes de abrir a nova.
+        // Atribuir src por cima de uma sessão viva deixa as duas disputando o
+        // decodificador de hardware — numa TV com um único decodificador 4K é
+        // o que produz imagem duplicada e travando.
+        pararPlayerAoVivo();
+        try {
+            fsPlayer.pause();
+            fsPlayer.removeAttribute('src');
+            fsPlayer.load();
+        } catch (e) {}
+
         fsContainer.style.display = 'block';
         fsPlayer.src = streamUrl;
-        fsPlayer.play();
+        fsPlayer.play().catch(e => console.log('Autoplay bloqueado:', e));
         fsPlayer.focus();
         if (window.currentTmdb && window.currentTmdb.logoUrl) {
             fsLogo.src = window.currentTmdb.logoUrl;
@@ -877,8 +1525,18 @@ function playFullscreenVideo(streamUrl, title) {
             fsTitle.style.display = 'none';
         }
         setTimeout(() => { const fb = document.getElementById('fs-btn-play'); if (fb) fb.focus(); }, 200);
-        if (fsContainer.requestFullscreen)            fsContainer.requestFullscreen();
-        else if (fsContainer.webkitRequestFullscreen) fsContainer.webkitRequestFullscreen();
+
+        // Sem requestFullscreen nativo, de propósito.
+        //
+        // #fs-player-container já é position:fixed com var(--tv-w)/var(--tv-h),
+        // ou seja, cobre a tela inteira só com CSS — o fullscreen nativo não
+        // acrescentava nada visualmente.
+        //
+        // Em compensação, ele custava caro: o container vive dentro de
+        // #tv-canvas, que tem transform: scale(). Promover a fullscreen nativo
+        // um elemento dentro de subárvore transformada obriga o WebView a
+        // recompor a superfície de vídeo no meio da decodificação, e é aí que
+        // aparecem quadros fantasma / imagem duplicada em stream 4K.
     }
 }
 
@@ -1241,6 +1899,10 @@ function closeVodModal() {
 function onVodCategoriesLoaded(jsonString) {
     let categories = [];
     try { categories = JSON.parse(jsonString); } catch(e) {}
+
+    // Bloqueio adulto: filtra aqui, onde a categoria aparece pela primeira
+    // vez — sem categoria na tela nao ha caminho ate o conteudo.
+    categories = filtrarAdulto(categories);
     
     const container = document.getElementById('vod-categories-list');
     container.innerHTML = '';
@@ -1391,6 +2053,10 @@ function onVodListLoaded(jsonString, fromCache) {
 function onSeriesCategoriesLoaded(jsonString) {
     let categories = [];
     try { categories = JSON.parse(jsonString); } catch(e) {}
+
+    // Bloqueio adulto: filtra aqui, onde a categoria aparece pela primeira
+    // vez — sem categoria na tela nao ha caminho ate o conteudo.
+    categories = filtrarAdulto(categories);
     
     const container = document.getElementById('vod-categories-list');
     container.innerHTML = '';
@@ -1498,19 +2164,49 @@ function onEpgLoaded(jsonString) {
         return;
     }
     
-    epg.forEach(prog => {
+    epg.forEach((prog, index) => {
         const div = document.createElement('div');
         div.className = "epg-item";
         
         let title = prog.title;
         try { title = decodeURIComponent(escape(window.atob(prog.title))); } catch(e) {}
         
-        const horaDe = (v) => (v && String(v).includes(' '))
-            ? String(v).split(' ')[1].substring(0, 5)
-            : (v || '');
+        // Cada provedor Xtream manda o horário num formato. Já vimos o mesmo
+        // programa vir com start em texto ("2026-07-22 15:20:00") e end em
+        // epoch (1784751000). A versão anterior devolvia o valor CRU quando não
+        // reconhecia o formato — era daí que saía o número na tela.
+        const doisDigitos = (n) => String(n).padStart(2, '0');
+        const horaDeData = (d) => isNaN(d) ? '' : doisDigitos(d.getHours()) + ':' + doisDigitos(d.getMinutes());
 
-        const startTime = horaDe(prog.start);
-        const endTime = horaDe(prog.end || prog.stop || prog.end_timestamp);
+        const horaDe = (v) => {
+            if (v === null || v === undefined) return '';
+            const s = String(v).trim();
+            if (!s) return '';
+
+            // "AAAA-MM-DD HH:MM:SS": já vem no fuso do servidor, usa direto.
+            // O padrão é conferido por inteiro — testar só por espaço fazia
+            // qualquer texto solto virar "hora".
+            const comData = s.match(/^\d{4}-\d{2}-\d{2} (\d{2}:\d{2})/);
+            if (comData) return comData[1];
+
+            // ISO 8601
+            if (s.includes('T')) return horaDeData(new Date(s));
+
+            // Epoch puro: 10 dígitos são segundos, 13 são milissegundos
+            if (/^\d{9,14}$/.test(s)) {
+                const n = Number(s);
+                return horaDeData(new Date(s.length > 11 ? n : n * 1000));
+            }
+
+            // Já veio como "HH:MM"
+            if (/^\d{1,2}:\d{2}/.test(s)) return s.substring(0, 5);
+
+            // Formato desconhecido: melhor não mostrar nada do que mostrar lixo
+            return '';
+        };
+
+        const startTime = horaDe(prog.start || prog.startTimestamp);
+        const endTime = horaDe(prog.end || prog.stop || prog.endTimestamp || prog.end_timestamp);
 
         // Guarda os horários brutos: a faixa da tela cheia usa para calcular o progresso
         div.dataset.start = prog.start || '';
@@ -1521,6 +2217,12 @@ function onEpgLoaded(jsonString) {
             <div class="epg-program-title">${title}</div>
         `;
         container.appendChild(div);
+
+        // O primeiro item é o que está no ar: alimenta o overlay do player
+        if (index === 0 && _canalAtual) {
+            const faixa = startTime ? `${startTime}${endTime ? ' - ' + endTime : ''}  ·  ` : '';
+            mostrarInfoCanal(null, faixa + title);
+        }
     });
 }
 
@@ -1540,8 +2242,17 @@ document.addEventListener('keydown', function(e) {
         let focusables;
         const vodScreen = document.getElementById('vod-detail-screen');
         const isVodVisible = vodScreen && window.getComputedStyle(vodScreen).display !== 'none';
+        const telaCfg = document.getElementById('settings-screen');
+        const cfgVisivel = telaCfg && telaCfg.style.display !== 'none';
 
-        if (isVkVisible) {
+        if (cfgVisivel) {
+            // Configurações é tela cheia: o seletor não pode alcançar a home
+            // por trás dela. Só o painel aberto entra, senão o D-pad passearia
+            // por controles de abas que não estão à vista.
+            const painelAberto = telaCfg.querySelector('.cfg-painel.active');
+            focusables = Array.from(telaCfg.querySelectorAll('.cfg-aba'))
+                .concat(painelAberto ? Array.from(painelAberto.querySelectorAll('button, [tabindex="0"]')) : []);
+        } else if (isVkVisible) {
             focusables = Array.from(vkContainer.querySelectorAll('button, [tabindex="0"]'));
         } else if (isExitModalVisible) {
             focusables = Array.from(exitModal.querySelectorAll('button, [tabindex="0"]'));
@@ -1559,13 +2270,33 @@ document.addEventListener('keydown', function(e) {
             focusables = Array.from(activeRow.querySelectorAll('.vod-item, [tabindex="0"]'));
         }
 
+        // Uma passada só, guardando o rect de cada focável. Antes este trecho
+        // chamava getComputedStyle DUAS vezes por elemento e o laço de direção
+        // logo abaixo pedia getBoundingClientRect de novo — numa categoria com
+        // mil canais davam ~2000 recálculos síncronos de estilo e ~2000 de
+        // layout POR TECLA. É daí que vinha o engasgo ao segurar a seta.
+        const vpW = document.documentElement.clientWidth || window.innerWidth;
+        const vpH = document.documentElement.clientHeight || window.innerHeight;
+
+        const rectDe = new Map();
         focusables = focusables.filter(el => {
             const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0 && 
-                   window.getComputedStyle(el).visibility !== 'hidden' && 
-                   window.getComputedStyle(el).display !== 'none';
+            // Largura/altura zeradas já cobrem display:none
+            if (rect.width <= 0 || rect.height <= 0) return false;
+            // Descarta o que está longe demais para ser alvo de um passo. A
+            // margem é de uma tela inteira em cada sentido, então o vizinho
+            // logo abaixo da dobra continua alcançável.
+            if (rect.bottom < -vpH || rect.top > vpH * 2) return false;
+            if (rect.right < -vpW || rect.left > vpW * 2) return false;
+            rectDe.set(el, rect);
+            return true;
         });
-            
+
+        // visibility:hidden não zera o rect, então ainda exige consultar estilo.
+        // A diferença é que agora isso roda sobre a dúzia que sobrou, não sobre
+        // a lista inteira.
+        focusables = focusables.filter(el => window.getComputedStyle(el).visibility !== 'hidden');
+
         if (focusables.length === 0) return;
 
         if (!focusables.includes(active)) {
@@ -1576,13 +2307,13 @@ document.addEventListener('keydown', function(e) {
 
         e.preventDefault(); // Impede scroll padrão do navegador na TV
 
-        const activeRect = active.getBoundingClientRect();
+        const activeRect = rectDe.get(active) || active.getBoundingClientRect();
         let bestCandidate = null;
         let minDistance = Infinity;
 
         focusables.forEach(cand => {
             if (cand === active) return;
-            const candRect = cand.getBoundingClientRect();
+            const candRect = rectDe.get(cand);
             
             let isDirectionMatch = false;
             let distPrimary = 0;
@@ -1719,11 +2450,40 @@ function marcarCampoDigitando(input, ativo) {
     if (grupo) grupo.classList.toggle('digitando', ativo);
 }
 
+/* Teclado virtual só na TV.
+   No navegador existe o teclado do PC; no celular, o teclado do sistema. Nos
+   dois casos o teclado da interface só atrapalha. Na TV ele continua sendo o
+   único jeito de digitar, já que só há D-pad. */
+const USA_TECLADO_VIRTUAL = (() => {
+    if (!window.AndroidApp) return false;                          // navegador
+    if (typeof window.AndroidApp.isTv !== 'function') return true;  // APK antigo: mantém o comportamento de antes
+    try { return !!window.AndroidApp.isTv(); } catch (e) { return true; }
+})();
+
+// Os três campos nascem readonly no HTML porque, na TV, só o teclado da
+// interface pode preenchê-los. Fora dela isso precisa sair — senão o teclado
+// do aparelho até sobe, mas não escreve nada.
+if (!USA_TECLADO_VIRTUAL) {
+    ['username', 'password', 'search-input-field'].forEach(id => {
+        const campo = document.getElementById(id);
+        if (campo) campo.removeAttribute('readonly');
+    });
+}
+
 function openKeyboard(inputId) {
+    const campo = document.getElementById(inputId);
+
+    // Sem teclado virtual: entrega o foco ao campo e deixa o teclado do
+    // aparelho (ou do PC) aparecer sozinho.
+    if (!USA_TECLADO_VIRTUAL) {
+        if (campo) campo.focus();
+        return;
+    }
+
     // Limpa a marcação de um campo anterior antes de trocar de alvo
     marcarCampoDigitando(currentInput, false);
 
-    currentInput = document.getElementById(inputId);
+    currentInput = campo;
     marcarCampoDigitando(currentInput, true);
 
     const vk = document.getElementById('virtual-keyboard');
@@ -1758,19 +2518,27 @@ document.querySelectorAll('.vk-key').forEach(key => {
 
 function handleKeyPress(keyElement) {
     if(!currentInput) return;
-    
+
+    // O teclado virtual escreve direto no .value, o que não dispara 'input' —
+    // então o rascunho é salvo à mão aqui.
+    const salvarSeUsuario = () => {
+        if (currentInput && currentInput.id === 'username') salvarRascunhoUsuario();
+    };
+
     let val = keyElement.getAttribute('data-val') || keyElement.innerText;
-    
+
     if (val === 'SUBMIT') {
         closeKeyboard();
         return;
     }
     if (val === 'CLEAR') {
         currentInput.value = '';
+        salvarSeUsuario();
         return;
     }
     if (val === 'BACKSPACE' || val === '⌫') {
         currentInput.value = currentInput.value.slice(0, -1);
+        salvarSeUsuario();
         return;
     }
     if (val === 'SHIFT' || val === '⬆') {
@@ -1790,6 +2558,7 @@ function handleKeyPress(keyElement) {
     let charToInsert = isShift ? val.toUpperCase() : val.toLowerCase();
     if(val === ' ') charToInsert = ' ';
     currentInput.value += charToInsert;
+    salvarSeUsuario();
 }
 
 function updateKeyboardCase() {
@@ -1927,12 +2696,20 @@ function abrirPlayerTelaCheia() {
     const c = document.querySelector('.live-player-container');
     if (!c || c.classList.contains('fullscreen')) return;
     c.classList.add('fullscreen');
+    // Ao expandir, apresenta o canal: a faixa já está preenchida desde a
+    // seleção, só faltava a tela cheia para poder aparecer.
+    if (_canalAtual) mostrarInfoCanal(null, undefined);
 }
 
 function fecharPlayerTelaCheia() {
     const c = document.querySelector('.live-player-container');
     if (!c || !c.classList.contains('fullscreen')) return;
     c.classList.remove('fullscreen');
+
+    // Recolheu: a faixa não pertence ao mini-player
+    clearTimeout(_timerInfoCanal);
+    const info = document.getElementById('canal-info-overlay');
+    if (info) info.classList.remove('visivel');
 
     // Devolve o foco ao canal que estava tocando, na mesma categoria
     const canalAtivo = document.querySelector('.live-channel-item.active');
@@ -1942,6 +2719,79 @@ function fecharPlayerTelaCheia() {
             canalAtivo.scrollIntoView({ block: 'nearest' });
         }, 50);
     }
+}
+
+/* Reprodução HLS. Preferimos hls.js (MSE); se não carregar mas o aparelho
+   tocar HLS nativamente (comum em TV), caímos para o <video> direto. */
+function tocarHls(url, videoElement, overlay, loader, tituloEl, falhar) {
+    if (overlay) overlay.style.display = 'block';
+    if (loader) loader.style.display = 'block';
+
+    // Solta qualquer player anterior (TS ou HLS) antes de abrir a nova fonte
+    destruirPlayerMpegts(mpegtsPlayer);
+    mpegtsPlayer = null;
+    destruirHls();
+
+    videoElement.onplaying = () => {
+        if (overlay) overlay.style.display = 'none';
+        if (loader) loader.style.display = 'none';
+    };
+
+    if (_liveRetry.url !== url) _liveRetry = { url: url, count: 0 };
+
+    // Reconecta em erro transitório, mesmo esquema do caminho TS
+    const tentarDeNovo = () => {
+        if (_liveRetry.count >= MAX_TENTATIVAS_LIVE) {
+            falhar('Não foi possível conectar a este canal.');
+            return;
+        }
+        _liveRetry.count++;
+        if (loader) loader.style.display = 'block';
+        if (tituloEl) tituloEl.innerText = `Reconectando (${_liveRetry.count}/${MAX_TENTATIVAS_LIVE})...`;
+        clearTimeout(_liveRetryTimer);
+        _liveRetryTimer = setTimeout(() => {
+            if (localStorage.getItem('current_category') !== 'tv') return;
+            const telaAoVivo = document.getElementById('live-tv-screen');
+            if (!telaAoVivo || telaAoVivo.style.display === 'none') return;
+            playLiveStream(url);
+        }, 1500);
+    };
+
+    videoElement.addEventListener('playing', () => { _liveRetry.count = 0; }, { once: true });
+
+    carregarHlsJs().then((temHls) => {
+        if (temHls && window.Hls && window.Hls.isSupported()) {
+            hlsPlayer = new window.Hls({
+                enableWorker: true,
+                lowLatencyMode: false,
+                // Buffer generoso: absorve oscilação de rede, como no caminho TS
+                backBufferLength: 30,
+                maxBufferLength: 30
+            });
+            hlsPlayer.loadSource(url);
+            hlsPlayer.attachMedia(videoElement);
+            hlsPlayer.on(window.Hls.Events.MANIFEST_PARSED, () => {
+                videoElement.play().catch(e => console.log('Autoplay bloqueado:', e));
+            });
+            hlsPlayer.on(window.Hls.Events.ERROR, (evt, data) => {
+                if (!data || !data.fatal) return; // só erros fatais interessam
+                console.error('Erro HLS:', data.type, data.details);
+                destruirHls();
+                tentarDeNovo();
+            });
+            return;
+        }
+
+        // Sem hls.js utilizável: tenta o suporte nativo do aparelho
+        if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+            videoElement.src = url;
+            videoElement.play().catch(e => console.log('Autoplay bloqueado:', e));
+            videoElement.onerror = () => tentarDeNovo();
+            return;
+        }
+
+        falhar('Este canal não pôde ser reproduzido neste dispositivo.');
+    });
 }
 
 function playLiveStream(url) {
@@ -1958,6 +2808,14 @@ function playLiveStream(url) {
         if (tituloEl) tituloEl.innerText = msg;
     };
 
+    // Formato HLS: o getStreamUrl monta a URL com .m3u8. O mpegts.js não
+    // decodifica HLS, então este caminho usa o hls.js (ou o suporte nativo do
+    // aparelho, quando houver). É o que faltava para a opção HLS funcionar.
+    if (/\.m3u8(\?|$)/i.test(url)) {
+        tocarHls(url, videoElement, overlay, loader, tituloEl, falhar);
+        return;
+    }
+
     // Biblioteca vem de CDN: sem internet ela não carrega e o player ficaria travado no loader
     if (typeof mpegts === 'undefined' || !mpegts.getFeatureList().mseLivePlayback) {
         return falhar('Não foi possível iniciar o player. Verifique a conexão.');
@@ -1967,10 +2825,10 @@ function playLiveStream(url) {
     if (overlay) overlay.style.display = 'block';
     if (loader) loader.style.display = 'block';
 
-    if (mpegtsPlayer) {
-        mpegtsPlayer.destroy();
-        mpegtsPlayer = null;
-    }
+    // Troca de canal: o anterior tem que soltar a conexão antes de abrir a nova,
+    // senão os dois streams baixam ao mesmo tempo.
+    destruirPlayerMpegts(mpegtsPlayer);
+    mpegtsPlayer = null;
 
     // Oculta o loader e o overlay assim que o vídeo começar a rodar
     videoElement.onplaying = () => {
@@ -2006,7 +2864,17 @@ function playLiveStream(url) {
             if (loader) loader.style.display = 'block';
             if (tituloEl) tituloEl.innerText = `Reconectando (${_liveRetry.count}/${MAX_TENTATIVAS_LIVE})...`;
             clearTimeout(_liveRetryTimer);
-            _liveRetryTimer = setTimeout(() => playLiveStream(url), 1500);
+            _liveRetryTimer = setTimeout(() => {
+                // Um erro em voo pode agendar a reconexão logo depois de o
+                // usuário trocar de aba. Sem esta checagem o player voltava a
+                // tocar fora da TV ao vivo, sem nada visível na tela.
+                // A categoria salva é a fonte confiável: o display da tela pode
+                // ter sido alterado por qualquer um dos caminhos de navegação.
+                if (localStorage.getItem('current_category') !== 'tv') return;
+                const telaAoVivo = document.getElementById('live-tv-screen');
+                if (!telaAoVivo || telaAoVivo.style.display === 'none') return;
+                playLiveStream(url);
+            }, 1500);
             return;
         }
 
@@ -2143,6 +3011,13 @@ function setupFullscreenPlayer() {
 
     btnFullscreen.addEventListener('click', (e) => {
         e.stopPropagation();
+        // No APK a Fullscreen API não se aplica: o container já ocupa a tela
+        // toda por CSS, e a WebView a ignora sem onShowCustomView (ver nota
+        // acima do playerEstaEmTelaCheia). Insistir nela dentro do #tv-canvas,
+        // que é transformado, é o que corrompia a imagem em 4K.
+        // No navegador ela funciona e continua valendo.
+        if (window.AndroidApp) return;
+
         if (!document.fullscreenElement && !document.webkitIsFullScreen) {
             if (fsContainer.requestFullscreen) fsContainer.requestFullscreen();
             else if (fsContainer.webkitRequestFullscreen) fsContainer.webkitRequestFullscreen();
@@ -2164,6 +3039,105 @@ function setupFullscreenPlayer() {
 
 let fsMpegtsPlayer = null;
 window.isFullscreenLive = false;
+
+/**
+ * Ponto único de parada do ao vivo: mini-player, tela cheia e reconexão.
+ *
+ * Existiam duas paradas independentes — uma dentro de mostrarCategoria e outra
+ * em pararTudo — e elas divergiram. A da troca de aba destruía o player mas NÃO
+ * limpava _liveRetryTimer: se houvesse reconexão agendada, 1,5s depois de sair
+ * da TV ao vivo o setTimeout disparava playLiveStream e recriava o player, que
+ * seguia tocando sem nada visível na tela. Com um ponto só, não há como uma das
+ * duas esquecer um passo de novo.
+ */
+/**
+ * Desmonta um player mpegts.js na ordem que a biblioteca exige.
+ *
+ * Só chamar destroy() NÃO basta: quem aborta o carregador de rede é o unload().
+ * Sem ele a conexão HTTP do stream continua aberta e o transmuxer segue
+ * consumindo — o canal continuava tocando depois de trocar de aba.
+ *
+ * Cada passo vai em seu próprio try: se um falhar, os seguintes ainda rodam.
+ * Antes um destroy() que lançasse zerava a referência e deixava o player vivo
+ * e inalcançável.
+ */
+function destruirPlayerMpegts(p) {
+    if (!p) return;
+    try { p.pause(); } catch (e) {}
+    try { p.unload(); } catch (e) {}
+    try { p.detachMediaElement(); } catch (e) {}
+    try { p.destroy(); } catch (e) {}
+}
+
+// Instância única do player HLS (só existe quando o formato HLS é usado).
+let hlsPlayer = null;
+
+function destruirHls() {
+    if (!hlsPlayer) return;
+    try { hlsPlayer.stopLoad(); } catch (e) {}
+    try { hlsPlayer.detachMedia(); } catch (e) {}
+    try { hlsPlayer.destroy(); } catch (e) {}
+    hlsPlayer = null;
+}
+
+/* hls.js é carregado sob demanda: só quem escolhe HLS paga o download, e uma
+   única vez por sessão. Quem fica no TS (padrão) nunca baixa a biblioteca. */
+let _hlsJsPromise = null;
+function carregarHlsJs() {
+    if (window.Hls) return Promise.resolve(true);
+    if (_hlsJsPromise) return _hlsJsPromise;
+    _hlsJsPromise = new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js';
+        s.onload = () => resolve(!!window.Hls);
+        s.onerror = () => { _hlsJsPromise = null; resolve(false); };
+        document.head.appendChild(s);
+    });
+    return _hlsJsPromise;
+}
+
+function pararPlayerAoVivo() {
+    clearTimeout(_liveRetryTimer);
+    _liveRetryTimer = null;
+    _liveRetry = { url: null, count: 0 };
+
+    esconderInfoCanal();
+
+    destruirPlayerMpegts(mpegtsPlayer);
+    mpegtsPlayer = null;
+
+    destruirPlayerMpegts(fsMpegtsPlayer);
+    fsMpegtsPlayer = null;
+
+    destruirHls();
+
+    ['live-player', 'fullscreen-player'].forEach(id => {
+        const v = document.getElementById(id);
+        if (!v) return;
+        try {
+            v.pause();
+            // srcObject cobre o caso de o MediaSource ter sido anexado por
+            // objeto em vez de URL; removeAttribute sozinho não o solta.
+            v.srcObject = null;
+            v.removeAttribute('src');
+            // load() com o src já removido é o que efetivamente encerra a
+            // requisição de rede pendente no WebView.
+            v.load();
+        } catch (e) {}
+    });
+}
+
+/* App saiu de vista: corta todo vídeo.
+   O onUserLeaveHint do MainActivity já cobre o botão Home, mas não os casos em
+   que o app continua vivo e apenas deixa de aparecer — descanso de tela da TV,
+   painel apagado, diálogo do sistema por cima, chamada entrando no celular. Sem
+   isto o mpegts.js seguia baixando o stream com a tela apagada.
+   Só para; não retoma sozinho ao voltar. */
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && typeof window.pararTudo === 'function') {
+        window.pararTudo();
+    }
+});
 
 function updateFullscreenControlsVisibility() {
     const rewind = document.getElementById('fs-btn-rewind');
@@ -2202,16 +3176,20 @@ function closeFullscreenPlayer() {
         else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     }
     
-    if (fsMpegtsPlayer) {
-        fsMpegtsPlayer.destroy();
-        fsMpegtsPlayer = null;
-    }
+    destruirPlayerMpegts(fsMpegtsPlayer);
+    fsMpegtsPlayer = null;
 
     fsPlayer.pause();
     fsPlayer.src = '';
     fsContainer.style.display = 'none';
     
-    // Restaura o canal que estava tocando no mini-player
+    // Restaura o canal do mini-player — mas SÓ se ainda estivermos na TV ao
+    // vivo. Sem esta checagem, fechar um filme em Filmes/Séries encontrava o
+    // canal ainda marcado como ativo de uma visita anterior e religava o
+    // stream ao vivo fora da aba: áudio em segundo plano e, pior, um segundo
+    // decodificador aberto logo depois de um vídeo 4K.
+    if (localStorage.getItem('current_category') !== 'tv') return;
+
     const activeChannel = document.querySelector('.live-channel-item.active');
     if (activeChannel) {
         reiniciarPreviewCanal(activeChannel);
@@ -2271,7 +3249,18 @@ document.addEventListener('mouseover', (e) => {
 function initSearchKeyboard() {
     const inputField = document.getElementById('search-input-field');
     const keys = document.querySelectorAll('.sk-key');
-    
+
+    // Fora da TV o teclado da tela sai e a busca passa a reagir à digitação.
+    // (o readonly já foi removido junto com o dos campos de login)
+    if (!USA_TECLADO_VIRTUAL) {
+        const tecladoBusca = document.getElementById('search-virtual-keyboard');
+        if (tecladoBusca) tecladoBusca.style.display = 'none';
+        if (inputField) {
+            inputField.addEventListener('input', () => realizarBusca(inputField.value));
+        }
+        return;
+    }
+
     keys.forEach(key => {
         key.onclick = (e) => {
             e.stopPropagation();
@@ -2429,6 +3418,12 @@ window.handleAndroidBack = function() {
         return;
     }
 
+    // Configurações é tela cheia: Voltar aqui significa sair dela
+    if (configuracoesAbertas()) {
+        fecharConfiguracoes();
+        return;
+    }
+
     // -1. Se o modal de confirmação de saída estiver aberto, fecha ele
     const exitModal = document.getElementById('exit-confirm-modal');
     if (exitModal && exitModal.style.display !== 'none') {
@@ -2498,11 +3493,10 @@ document.addEventListener('keydown', function(e) {
 // Sem isso o mpegts.js continuaria baixando o stream mesmo com o app fechando.
 window.pararTudo = function () {
     try {
-        clearTimeout(_liveRetryTimer);
-        if (mpegtsPlayer) {
-            mpegtsPlayer.destroy();
-            mpegtsPlayer = null;
-        }
+        pararPlayerAoVivo();
+        // Varre o resto: VOD em tela cheia e qualquer <video> que tenha sobrado.
+        // Chamado quando o app sai de cena (onUserLeaveHint no MainActivity),
+        // então aqui a rede tem mesmo que ficar em silêncio.
         document.querySelectorAll('video').forEach(v => {
             try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
         });
@@ -2513,6 +3507,8 @@ window.pararTudo = function () {
 
 // Inicializar teclado de busca
 initSearchKeyboard();
+iniciarRascunhoLogin();
+iniciarConfiguracoes();
 
 // =======================================================
 // EXIT CONFIRMATION MODAL LOGIC

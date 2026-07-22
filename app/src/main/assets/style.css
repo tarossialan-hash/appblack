@@ -4,13 +4,56 @@
     box-sizing: border-box;
 }
 
+/* ---------- CANVAS DE TV ----------
+   A UI é desenhada numa largura fixa de 1280px e escalada por transform até
+   encher a largura da tela. A ALTURA do canvas é elástica: app.js a calcula
+   como altura_real / escala, então o canvas cobre a tela inteira em qualquer
+   proporção, sem faixa preta e sem distorcer (a escala é a mesma nos dois
+   eixos — só o espaço vertical disponível muda).
+
+   Em 16:9 o canvas dá exatamente 1280x720, que é a medida em que todo este
+   arquivo foi desenhado. Num painel mais alto sobra espaço vertical; num mais
+   largo, o canvas fica mais baixo — por isso nada aqui pode assumir 720px
+   fixos de altura (ver #dynamic-hero-banner, que usa min()).
+
+   Consequência útil: dentro de #tv-canvas, position:fixed passa a se resolver
+   contra o canvas, não contra a janela — modais e player cobrem exatamente a
+   área da UI. Por isso 100vw/100vh viram var(--tv-w)/var(--tv-h). */
+:root {
+    --tv-w: 1280px;
+    --tv-h: 720px;   /* sobrescrito por app.js conforme a tela */
+    --tv-scale: 1;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    /* Fundo premium aplicado globalmente — login, sync, home, filmes, series, detalhe */
+    /* Fundo premium aplicado globalmente — login, sync, home, filmes, series, detalhe.
+       Fica no body para preencher também a faixa de letterbox. */
     background: radial-gradient(circle at 70% 30%, #1a1a1a 0%, #050505 60%, #000000 100%);
     background-attachment: fixed;
     color: #ffffff;
-    height: 100vh;
+    overflow: hidden;
+}
+
+#tv-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--tv-w);
+    height: var(--tv-h);
+    /* Preto próprio: sem isto, qualquer folga de sub-pixel entre as camadas
+       internas deixaria passar o #1a1a1a do radial-gradient do body, que
+       aparece como risco claro. */
+    background: #000;
+    transform: scale(var(--tv-scale));
+    /* Ancorado no canto: a escala cresce a partir de 0,0 e o canvas cobre a
+       tela toda. Centralizar exigiria sobra dos dois lados — ou seja, faixa. */
+    transform-origin: top left;
     overflow: hidden;
 }
 
@@ -33,10 +76,11 @@ body {
     height: auto;
     display: block;
     image-rendering: -webkit-optimize-contrast;
-    /* mix-blend-mode: screen funde com o fundo preto, eliminando qualquer artefato
-       de fundo não-transparente na PNG sem custo extra de renderização */
-    mix-blend-mode: screen;
-    filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.18));
+    /* Sem mix-blend-mode: screen. Ele existia para esconder fundo opaco da PNG,
+       mas o arquivo é palette com chunk tRNS — já tem transparência. O blend
+       somava luminância sobre o branco da marca e estourava em TV com contraste
+       agressivo (modo Vivid/Dinâmico). */
+    filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.12));
 }
 
 @keyframes loader-respira {
@@ -241,6 +285,22 @@ body {
 
 .input-group input::placeholder {
     color: #555;
+}
+
+/* O navegador pinta campo autopreenchido com fundo claro próprio, ignorando
+   background-color. A única forma de neutralizar é uma box-shadow interna
+   gigante na cor certa, com o texto forçado por -webkit-text-fill-color.
+   Sem isto os campos apareciam brancos no meio do login escuro. */
+.input-group input:-webkit-autofill,
+.input-group input:-webkit-autofill:hover,
+.input-group input:-webkit-autofill:focus,
+.input-group input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #0d0d0d inset !important;
+    box-shadow: 0 0 0 1000px #0d0d0d inset !important;
+    -webkit-text-fill-color: #fff !important;
+    caret-color: #fff;
+    /* Atrasa a animação interna do autofill para ela nunca chegar a pintar */
+    transition: background-color 100000s ease-in-out 0s;
 }
 
 /* Enquanto o teclado virtual está aberto, o foco fica nas teclas e o campo
@@ -462,27 +522,53 @@ body {
     outline: none;
 }
 
-.nav-item:focus {
+/* Foco e seção atual são coisas diferentes e precisam de visuais diferentes.
+   Antes os dois eram o mesmo pill branco: ao navegar do "Início" para "TV ao
+   vivo" pelo controle, os dois itens ficavam brancos e o usuário perdia a
+   referência de onde estava o cursor.
+
+   Pill branco  = FOCO, onde o controle está agora (só um por vez)
+   Traço laranja = seção ABERTA, para onde o app já navegou */
+.nav-item:focus,
+.nav-item:hover {
     background-color: #fff;
     color: #000;
     border-color: #fff;
     outline: none;
     transform: scale(1.02);
-    box-shadow: 0 4px 10px rgba(255,255,255,0.25);
+    box-shadow: 0 4px 10px rgba(255,255,255,0.22);
 }
 
-.nav-item:hover, .nav-item.active {
+.nav-item.active {
+    background: transparent;
+    color: #ffffff;
+    border-color: transparent;
+    position: relative;
+}
+
+.nav-item.active::after {
+    content: '';
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 1px;
+    height: 2px;
+    border-radius: 2px;
+    background: #f39c12;
+}
+
+/* Item que está aberto E com foco: pill branco vence, e o traço inverte para
+   preto porque laranja sobre branco quase não aparece. */
+.nav-item.active:focus,
+.nav-item.active:hover {
     background: #fff;
     color: #000;
     border-color: #fff;
 }
 
-.nav-item.active:focus {
-    background: #fff;
-    color: #000;
-    border-color: #fff;
-    transform: scale(1.02);
-    box-shadow: 0 4px 10px rgba(255,255,255,0.25);
+.nav-item.active:focus::after,
+.nav-item.active:hover::after {
+    background: #000;
 }
 
 .icon-btn {
@@ -1045,8 +1131,8 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: var(--tv-w);
+    height: var(--tv-h);
     /* mesmo gradiente do body — não pode ser transparent pois fica em position:fixed sobre a home */
     background: radial-gradient(circle at 70% 30%, #1a1a1a 0%, #050505 60%, #000000 100%);
     display: flex;
@@ -1129,7 +1215,7 @@ body {
 .live-tv-layout {
     display: flex;
     width: 100%;
-    height: 100vh; 
+    height: var(--tv-h); 
     padding-top: 20px; /* Reduzido para ocupar o espaço do cabeçalho que agora é ocultado */
     background-color: #121212;
     padding-left: 20px;
@@ -1145,7 +1231,15 @@ body {
     border-radius: 8px;
     overflow-y: auto;
     padding: 10px 0;
+    /* Encaixe na rolagem: o item focado para alinhado ao topo em vez de
+       parar cortado no meio, que era o que ficava feio nas bordas da lista.
+       scroll-padding recua o ponto de encaixe para dentro da coluna. */
+    scroll-snap-type: y proximity;
+    scroll-padding-top: 10px;
+    scroll-padding-bottom: 10px;
 }
+
+.live-category-item { scroll-snap-align: start; }
 
 .live-col-channels {
     flex: 0 0 30%;
@@ -1153,7 +1247,12 @@ body {
     border-radius: 8px;
     overflow-y: auto;
     padding: 10px;
+    scroll-snap-type: y proximity;
+    scroll-padding-top: 10px;
+    scroll-padding-bottom: 10px;
 }
+
+.live-col-channels .live-channel-item { scroll-snap-align: start; }
 
 /* Uma categoria pode trazer mais de mil canais. Sem isto, todos os itens
    (com seus logos) eram desenhados de uma vez a cada troca de categoria. */
@@ -1184,8 +1283,8 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: var(--tv-w);
+    height: var(--tv-h);
     padding-top: 0;
     border-radius: 0;
     z-index: 9999;
@@ -1194,6 +1293,108 @@ body {
 .live-player-container.fullscreen .premium-video-player {
     object-fit: contain;
     border-radius: 0;
+}
+
+/* ---------- OVERLAY DE INFORMAÇÃO DO CANAL ----------
+   Faixa no rodapé do player: logo, nome e o que está no ar.
+   Só opacity e transform entram na transição — as duas que a GPU compõe sem
+   repintar. Numa Smart TV, animar sombra ou filtro custa um repinte por quadro
+   e é o que faz a interface engasgar. */
+#canal-info-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    /* Padding-top alto: o degradê sobe bem mais que a faixa de texto, dando o
+       esmaecimento longo e harmonioso pedido. */
+    padding: 130px 22px 18px;
+
+    /* Degradê de baixo para cima, longo e com muitas paradas em curva suave —
+       poucas paradas criam degraus visíveis em painel de TV. */
+    background: linear-gradient(to top,
+        rgba(0,0,0,0.94) 0%,
+        rgba(0,0,0,0.9) 10%,
+        rgba(0,0,0,0.84) 20%,
+        rgba(0,0,0,0.76) 30%,
+        rgba(0,0,0,0.66) 40%,
+        rgba(0,0,0,0.55) 50%,
+        rgba(0,0,0,0.44) 60%,
+        rgba(0,0,0,0.32) 70%,
+        rgba(0,0,0,0.21) 80%,
+        rgba(0,0,0,0.1) 90%,
+        transparent 100%);
+
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.28s ease-out, transform 0.28s ease-out;
+    pointer-events: none;
+}
+
+#canal-info-overlay.visivel {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+#canal-info-overlay .ci-logo {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    object-fit: contain;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.06);
+    padding: 4px;
+}
+
+#canal-info-overlay .ci-textos {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#canal-info-overlay .ci-nome {
+    font-size: 17px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#canal-info-overlay .ci-programa {
+    margin-top: 3px;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.72);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#canal-info-overlay .ci-programa:empty {
+    display: none;
+}
+
+/* Em tela cheia a faixa cresce junto com o player */
+.live-player-container.fullscreen #canal-info-overlay {
+    padding: 220px 48px 42px;
+    gap: 20px;
+}
+
+.live-player-container.fullscreen #canal-info-overlay .ci-logo {
+    width: 68px;
+    height: 68px;
+}
+
+.live-player-container.fullscreen #canal-info-overlay .ci-nome {
+    font-size: 26px;
+}
+
+.live-player-container.fullscreen #canal-info-overlay .ci-programa {
+    font-size: 17px;
 }
 
 .live-epg-container {
@@ -1215,6 +1416,10 @@ body {
     /* Camada propria: evita repintar a lista inteira ao mover o foco */
     transform: translateZ(0);
     backface-visibility: hidden;
+    /* Bloco de contenção para a barra de pressão (::before). O transform acima
+       já criaria um, mas deixar explícito evita que uma mudança nele quebre
+       o posicionamento sem que se perceba. */
+    position: relative;
     width: 90%;
     margin-left: auto;
     margin-right: auto;
@@ -1227,7 +1432,12 @@ body {
     font-weight: 600;
     line-height: 1.4;
     text-transform: uppercase;
-    transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, opacity 0.2s, filter 0.2s;
+    /* Só transform e cor entram na transição. box-shadow, filter e opacity
+       repintam a cada quadro e não têm caminho rápido na GPU — animá-los a
+       cada mudança de foco é caro no SoC de TV. Eles continuam mudando no
+       :focus, só que instantaneamente, o que num seletor de TV até responde
+       melhor. Duração menor: 0,12s dá resposta mais imediata segurando a seta. */
+    transition: transform 0.12s ease-out, background-color 0.12s ease-out, color 0.12s ease-out;
     border: 1px solid transparent;
     outline: none;
     display: flex;
@@ -1248,6 +1458,380 @@ body {
 .live-channel-item.active {
     background-color: #333333;
     color: #fff;
+}
+
+/* Estrela só nos canais já favoritados, encostada na direita.
+   Voltou a ser ::after: a versão sempre visível e clicável poluía a lista.
+   Favoritar é por pressão longa — que no navegador funciona igual, segurando
+   o botão do mouse. */
+.live-channel-item.is-favorito::after {
+    content: '★';
+    margin-left: auto;
+    padding-left: 8px;
+    color: #f39c12;
+    font-size: 13px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+
+/* O nome ocupa o resto da linha, para a estrela não ser empurrada */
+.live-channel-item .channel-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* FAVORITOS é categoria sintética — o peso maior a separa das do provedor,
+   sem destoar da paleta da lista */
+.live-category-item.categoria-favoritos {
+    color: #ffffff;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+/* Preenchimento enquanto o OK está sendo segurado. Ancorado no ::before para
+   não brigar com o ::after, que é a estrela.
+
+   Duração e atraso vêm do app.js (--dur-barra / --atraso-barra), para o fim da
+   animação coincidir com o disparo do favorito. Durante o atraso a largura
+   fica em 0, então um toque curto não chega a mostrar nada. */
+.live-channel-item.segurando::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-radius: 6px;
+    background: rgba(243, 156, 18, 0.28);
+    animation: segurar-favorito var(--dur-barra, 1000ms) linear var(--atraso-barra, 300ms) forwards;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes segurar-favorito {
+    to { width: 100%; }
+}
+
+/* Pulso na estrela ao favoritar, para o olho ir até ela */
+.live-channel-item.favorito-pulso::after {
+    animation: estrela-pulso 520ms ease-out;
+}
+
+@keyframes estrela-pulso {
+    0%   { transform: scale(0.4); opacity: 0; }
+    55%  { transform: scale(1.5); opacity: 1; }
+    100% { transform: scale(1);   opacity: 1; }
+}
+
+/* Lista sem itens: precisa dizer o que fazer, não ficar em branco */
+.lista-vazia {
+    padding: 28px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.4);
+    text-align: center;
+    text-transform: none;
+    white-space: pre-line; /* respeita o \n da mensagem */
+}
+
+/* ---------- CONFIGURAÇÕES ----------
+   Mesmo padrão visual da TV ao vivo: fundo #121212, coluna #1A1A1A, itens com
+   texto #aaa que acendem em branco no foco. A aba/opção ativa usa a barra
+   branca à esquerda, idêntica à categoria selecionada em TV ao vivo. Só o
+   acento pontual (ícone do título) fica laranja. */
+.cfg-layout {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    background-color: #121212;
+    box-sizing: border-box;
+}
+
+.cfg-menu {
+    flex: 0 0 300px;
+    background-color: #1A1A1A;
+    border-radius: 8px;
+    margin: 20px 0 20px 20px;
+    padding: 16px 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.cfg-titulo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 22px 18px;
+    font-size: 21px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.cfg-titulo svg { flex: 0 0 auto; stroke: currentColor; }
+
+/* Item de menu = .live-category-item */
+.cfg-aba {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 14px 24px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-left: 4px solid transparent;
+    color: #aaa;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
+    outline: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.cfg-aba svg { flex: 0 0 auto; width: 20px; height: 20px; }
+
+.cfg-aba.active {
+    background-color: #333333;
+    color: #fff;
+    border-left: 4px solid #ffffff;
+}
+
+.cfg-aba.active svg { stroke: currentColor; }
+
+.cfg-aba:focus,
+.cfg-aba:hover {
+    background-color: #2b2b2b;
+    color: #fff;
+}
+
+.cfg-aba.active:focus,
+.cfg-aba.active:hover {
+    background-color: #3d3d3d;
+    color: #fff;
+}
+
+.cfg-menu-rodape {
+    margin-top: auto;
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.cfg-conteudo {
+    flex: 1 1 auto;
+    padding: 30px 34px;
+    overflow-y: auto;
+    min-width: 0;
+}
+
+.cfg-painel { display: none; }
+.cfg-painel.active { display: block; }
+
+.cfg-painel-titulo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.cfg-painel-titulo svg { width: 26px; height: 26px; stroke: currentColor; flex: 0 0 auto; }
+
+/* Cartão = coluna da TV ao vivo (#1A1A1A) */
+.cfg-cartao {
+    background-color: #1A1A1A;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.cfg-cartao-titulo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #aaa;
+}
+
+.cfg-cartao-titulo svg { width: 19px; height: 19px; flex: 0 0 auto; }
+
+.cfg-opcoes {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+/* Opção = item de canal: fundo escuro, acende no foco */
+.cfg-opcao {
+    flex: 1 1 240px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 18px;
+    background-color: #121212;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    color: #aaa;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.cfg-opcao svg { width: 21px; height: 21px; flex: 0 0 auto; }
+
+.cfg-opcao.selecionada {
+    border-color: #f39c12;
+    color: #fff;
+}
+
+/* Enquanto verifica atualização */
+.cfg-opcao.cfg-opcao-ocupada {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.cfg-opcao:focus,
+.cfg-opcao:hover {
+    background-color: #2b2b2b;
+    color: #fff;
+}
+
+/* Interruptor */
+.cfg-switch-linha {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    background-color: #121212;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.cfg-switch-linha:focus,
+.cfg-switch-linha:hover {
+    background-color: #2b2b2b;
+}
+
+.cfg-switch {
+    position: relative;
+    flex: 0 0 auto;
+    width: 52px;
+    height: 28px;
+    border-radius: 100px;
+    background: rgba(255, 255, 255, 0.14);
+    transition: background-color 0.18s ease-out;
+}
+
+.cfg-switch-bola {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #f2f2f2;
+    transition: transform 0.18s ease-out;
+}
+
+.cfg-switch-linha.ligado .cfg-switch { background: #1f7a4d; }
+.cfg-switch-linha.ligado .cfg-switch-bola { transform: translateX(24px); background: #46c98a; }
+
+/* Grade de informações */
+.cfg-grade {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.cfg-info-item {
+    background-color: #1A1A1A;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 16px 18px;
+    min-width: 0;
+}
+
+.cfg-info-item.largo { grid-column: 1 / -1; }
+
+.cfg-info-rotulo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #888;
+}
+
+.cfg-info-valor {
+    font-size: 19px;
+    font-weight: 700;
+    color: #fff;
+    word-break: break-word;
+}
+
+.cfg-info-valor.ok { color: #46c98a; }
+
+.cfg-info-vazio {
+    grid-column: 1 / -1;
+    padding: 22px;
+    text-align: center;
+    color: #888;
+    font-weight: 600;
+}
+
+.cfg-nota {
+    margin-top: 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #888;
+}
+
+/* Aviso curto de confirmação */
+#aviso-rapido {
+    position: absolute;
+    right: 32px;
+    bottom: 28px;
+    z-index: 12000;
+    padding: 12px 20px;
+    border-radius: 8px;
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(243, 156, 18, 0.35);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.22s ease-out, transform 0.22s ease-out;
+    pointer-events: none;
+}
+
+#aviso-rapido.visivel {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .live-channel-item.active:focus {
@@ -1448,8 +2032,8 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: var(--tv-w);
+    height: var(--tv-h);
     background: rgba(0,0,0,0.93);
     z-index: 9999;
     display: flex;
@@ -1492,8 +2076,8 @@ body {
 }
 
 .vod-modal-content {
-    width: 80vw;
-    height: 70vh;
+    width: 1024px;
+    height: 504px;
     background: #000;
     border-radius: 16px;
     overflow: hidden;
@@ -1633,7 +2217,8 @@ body {
     width: 8px;
     height: 8px;
     background-color: #ffffff;
-    box-shadow: 0 0 8px rgba(255,255,255,0.8);
+    /* Glow contido: a 0.8 o ponto virava um borrão numa TV com contraste alto */
+    box-shadow: 0 0 6px rgba(255,255,255,0.45);
 }
 
 .vod-modal-desc {
@@ -1683,7 +2268,9 @@ body {
     background: #ffffff;
     color: #000;
     border-color: #ffffff;
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+    /* O fundo branco já marca o foco; o halo entra só como reforço sutil.
+       A 0.4 sobre um botão branco a TV clipava os dois num borrão só. */
+    box-shadow: 0 0 14px rgba(255, 255, 255, 0.22);
 }
 
 /* Item já favoritado: coração preenchido */
@@ -1930,7 +2517,7 @@ body {
 .search-layout {
     display: flex;
     width: 100%;
-    height: 100vh;
+    height: var(--tv-h);
     margin-top: 0;
     padding: 40px;
     gap: 40px;
@@ -2071,7 +2658,10 @@ body {
 #dynamic-hero-banner {
     position: relative;
     width: 100%;
-    height: 560px;
+    /* 560px é a medida de projeto (16:9). O min() só entra quando o canvas
+       fica mais baixo que 720px — painel ultralargo, por exemplo — para o
+       banner não ultrapassar a tela e cortar as fileiras de baixo. */
+    height: min(560px, calc(var(--tv-h) * 0.78));
     overflow: hidden;
     background: #000;
     /* Banner encosta nas bordas da tela: sem cantos arredondados nem margem,
@@ -2085,7 +2675,13 @@ body {
     top: 0;
     right: 0;
     width: 75%;
-    height: 100%;
+    /* 92%, não 100%: o filter e o mask abaixo promovem esta imagem a uma
+       camada de composição própria. Indo até 100%, a borda dela coincidia com
+       a base do banner, que com a escala fracionária cai em pixel quebrado
+       (560 x 1,0672 = 597,6) — o compositor reamostrava e vazava um risco de
+       1px da imagem. Terminando em 92%, a borda da camada fica enterrada sob
+       a faixa preta sólida do gradiente (que começa em 93%). */
+    height: 92%;
     background-size: cover;
     background-position: center top;
     filter: brightness(0.95);
@@ -2098,26 +2694,62 @@ body {
 .spotlight-gradient {
     position: absolute;
     inset: 0;
-    /* Muitas paradas seguindo uma curva suave em vez de 3 pontos.
-       Gradiente escuro com poucos stops cria degraus (banding) bem visíveis em TV. */
+    /* Camada 1: dither. Ladrilho de 64x64 com amplitude de ~1-2 niveis em 255.
+       Invisivel como textura, mas desloca cada pixel o suficiente para quebrar
+       o plato de quantizacao — que e o que aparece como "camadas" no degrade.
+       Custo: uma textura de 3KB ladrilhada pela GPU. Nada a ver com a
+       superficie de 1920x560 que foi removida daqui antes.
+
+       Camadas 2 e 3: o degrade em si, agora com o dobro de paradas. Salto
+       menor entre paradas = degrau menor onde o 8 bits arredonda. */
     background:
         linear-gradient(to right,
-            #000 0%, #000 30%,
-            rgba(0,0,0,0.94) 38%, rgba(0,0,0,0.86) 45%,
-            rgba(0,0,0,0.72) 52%, rgba(0,0,0,0.55) 60%,
-            rgba(0,0,0,0.38) 68%, rgba(0,0,0,0.22) 78%,
-            rgba(0,0,0,0.1) 88%, transparent 100%),
+            #000 0%, #000 28%,
+            rgba(0,0,0,0.97) 33%, rgba(0,0,0,0.94) 37%,
+            rgba(0,0,0,0.9) 41%, rgba(0,0,0,0.86) 45%,
+            rgba(0,0,0,0.8) 49%, rgba(0,0,0,0.72) 53%,
+            rgba(0,0,0,0.64) 57%, rgba(0,0,0,0.55) 61%,
+            rgba(0,0,0,0.46) 65%, rgba(0,0,0,0.38) 69%,
+            rgba(0,0,0,0.3) 73%, rgba(0,0,0,0.22) 78%,
+            rgba(0,0,0,0.15) 83%, rgba(0,0,0,0.09) 88%,
+            rgba(0,0,0,0.04) 94%, transparent 100%),
         linear-gradient(to bottom,
-            transparent 42%, rgba(0,0,0,0.08) 52%,
-            rgba(0,0,0,0.2) 62%, rgba(0,0,0,0.36) 71%,
-            rgba(0,0,0,0.54) 79%, rgba(0,0,0,0.72) 86%,
-            rgba(0,0,0,0.87) 92%, rgba(0,0,0,0.96) 96%, #000 100%);
+            transparent 40%, rgba(0,0,0,0.04) 46%,
+            rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.14) 55%,
+            rgba(0,0,0,0.2) 59%, rgba(0,0,0,0.28) 63%,
+            rgba(0,0,0,0.36) 67%, rgba(0,0,0,0.45) 71%,
+            rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.65) 79%,
+            rgba(0,0,0,0.75) 82%, rgba(0,0,0,0.83) 85%,
+            rgba(0,0,0,0.9) 87%, rgba(0,0,0,0.96) 90%,
+            #000 93%, #000 100%);
     z-index: 1;
 }
 
 /* O banding já é combatido pelas paradas graduais do gradiente acima.
    A camada de ruído que havia aqui foi removida: em tela cheia de TV ela
    criava uma superfície extra de 1920x560 para compor a cada frame. */
+
+/* Dither confinado à região escura do degradê.
+   Antes ele cobria o banner inteiro, e sobre a área clara da imagem o ruído
+   deixava de ser imperceptível e virava granulado — a imagem ficava craquelada.
+   O banding só acontece onde o degradê escurece, então é só ali que o dither
+   precisa existir. A máscara o apaga na parte de cima, onde a arte aparece.
+
+   O ladrilho é dividido pela escala do canvas para cair sempre 1 pixel de
+   ruído = 1 pixel físico da TV. Fixo, numa tela de escala 2 cada pixel viraria
+   um bloco 2x2 e o banding voltava (medido: 48 faixas em 2560x1080). */
+.spotlight-gradient::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url('data:image/png;base64,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');
+    background-repeat: repeat;
+    background-size: calc(64px / var(--tv-scale)) calc(64px / var(--tv-scale));
+    -webkit-mask-image: linear-gradient(to top, #000 0%, #000 48%, transparent 78%);
+    mask-image: linear-gradient(to top, #000 0%, #000 48%, transparent 78%);
+    pointer-events: none;
+    z-index: 0;
+}
 
 .spotlight-content {
     position: absolute;
@@ -2409,8 +3041,8 @@ body {
 /* Override padding-top in fullscreen mode to display 16:9 natively stretched */
 .live-player-container:fullscreen {
     padding-top: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
+    width: var(--tv-w) !important;
+    height: var(--tv-h) !important;
     border-radius: 0 !important;
     background-color: #000 !important;
 }
@@ -2425,8 +3057,8 @@ body {
 
 .live-player-container:-webkit-full-screen {
     padding-top: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
+    width: var(--tv-w) !important;
+    height: var(--tv-h) !important;
     border-radius: 0 !important;
     background-color: #000 !important;
 }

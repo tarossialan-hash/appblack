@@ -2,7 +2,10 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1280, user-scalable=no">
+    <!-- O layout inteiro é desenhado num canvas fixo de 1280x720 (#tv-canvas) e
+         escalado por transform. Por isso o viewport precisa reportar os pixels
+         reais da TV: quem faz o ajuste é o CSS, não o WebView. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -12,14 +15,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=1.0.2">
     <script>
-        // Anti-FOUC (Flash of Unstyled Content): previne que a tela de login pisque no F5 se o usuário já estiver logado
+        // Anti-FOUC: se já há sessão, o login não deve piscar. Antes isto também
+        // forçava a home visível — mas ao abrir o app SEMPRE sincroniza primeiro
+        // (recarregar() no DOMContentLoaded). Revelar a home aqui fazia ela
+        // aparecer por um instante antes de a sincronização assumir.
+        //
+        // Agora só o login é escondido. Sync e home ficam no default (none) e
+        // quem os controla é o recarregar(), que roda no DOMContentLoaded logo
+        // em seguida e mostra a sincronização primeiro. Não forço o sync visível
+        // aqui de propósito: com !important o recarregar não conseguiria
+        // escondê-lo depois (inline não vence !important) e o sync travaria.
         if (localStorage.getItem('logged_in_user')) {
-            document.write('<style>#login-screen { display: none !important; } #home-screen { display: block !important; }</style>');
+            document.write('<style>#login-screen { display: none !important; }</style>');
         }
     </script>
     <!-- Loader agora é CSS puro (.loader-ring), sem dependência de CDN externo -->
 </head>
 <body>
+<!-- Canvas de 1280x720. Tudo que é UI vive aqui dentro, inclusive modais,
+     teclado e player: o transform de escala só alcança descendentes. -->
+<div id="tv-canvas">
     <div class="app-container">
         
         <!-- Tela de Login (Mesma que ajustamos anteriormente) -->
@@ -48,12 +63,15 @@
                 <div class="login-box">
                     <div class="input-group">
                         <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
-                        <input type="text" id="username" placeholder="Usuário" readonly tabindex="0" />
+                        <input type="text" id="username" placeholder="Usuário" readonly tabindex="0"
+                               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
                     </div>
                     
                     <div class="input-group">
                         <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
-                        <input type="password" id="password" placeholder="Senha" readonly tabindex="0" />
+                        <!-- new-password, e não off: o Chrome ignora "off" em campo de senha -->
+                        <input type="password" id="password" placeholder="Senha" readonly tabindex="0"
+                               autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" />
                         <button class="toggle-password-btn" type="button" onclick="togglePasswordVisibility()" tabindex="0">
                             <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                         </button>
@@ -109,6 +127,9 @@
                         </button>
                         <button class="action-btn" onclick="recarregar()">
                             <svg class="icon" style="stroke: #f39c12;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        </button>
+                        <button class="action-btn" onclick="abrirConfiguracoes()" aria-label="Configurações">
+                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                         </button>
                         <div class="divider"></div>
                         <button class="action-btn" onclick="abrirLogoutModal()">
@@ -287,6 +308,118 @@
         
     </div>
 
+    <!-- Configurações -->
+    <div id="settings-screen" style="display:none; position:fixed; inset:0; z-index:9500; background:#121212;">
+        <div class="cfg-layout">
+            <aside class="cfg-menu">
+                <div class="cfg-titulo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span>Configurações</span>
+                </div>
+
+                <button class="cfg-aba active" data-aba="player" tabindex="0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"></polygon></svg>
+                    <span>Player</span>
+                </button>
+                <button class="cfg-aba" data-aba="adulto" tabindex="0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><circle cx="12" cy="11" r="1.6"></circle><path d="M12 12.6V15"></path></svg>
+                    <span>Adulto</span>
+                </button>
+                <button class="cfg-aba" data-aba="informacoes" tabindex="0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    <span>Informações</span>
+                </button>
+                <button class="cfg-aba" data-aba="atualizacao" tabindex="0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+                    <span>Atualização</span>
+                </button>
+
+                <div class="cfg-menu-rodape">
+                    <button class="cfg-aba cfg-aba-acao" id="cfg-btn-deslogar" tabindex="0">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                        <span>Deslogar</span>
+                    </button>
+                    <button class="cfg-aba cfg-aba-acao" id="cfg-btn-retornar" tabindex="0">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        <span>Retornar</span>
+                    </button>
+                </div>
+            </aside>
+
+            <main class="cfg-conteudo">
+                <!-- Player -->
+                <section class="cfg-painel active" data-painel="player">
+                    <h2 class="cfg-painel-titulo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"></polygon></svg>
+                        Player
+                    </h2>
+                    <div class="cfg-cartao">
+                        <div class="cfg-cartao-titulo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                            Tipo de Player
+                        </div>
+                        <div class="cfg-opcoes">
+                            <button class="cfg-opcao" data-formato="m3u8" tabindex="0">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><polygon points="10 9 15 12 10 15 10 9" fill="currentColor" stroke="none"></polygon></svg>
+                                <span>HLS (M3U8)</span>
+                            </button>
+                            <button class="cfg-opcao" data-formato="ts" tabindex="0">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="4" y2="18"></line><line x1="8" y1="4" x2="8" y2="20"></line><line x1="12" y1="7" x2="12" y2="17"></line><line x1="16" y1="4" x2="16" y2="20"></line><line x1="20" y1="6" x2="20" y2="18"></line></svg>
+                                <span>MPEGTS (TS)</span>
+                            </button>
+                        </div>
+                        <p class="cfg-nota" id="cfg-nota-formato"></p>
+                    </div>
+                </section>
+
+                <!-- Adulto -->
+                <section class="cfg-painel" data-painel="adulto">
+                    <h2 class="cfg-painel-titulo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><circle cx="12" cy="11" r="1.6"></circle><path d="M12 12.6V15"></path></svg>
+                        Adulto
+                    </h2>
+                    <div class="cfg-cartao">
+                        <button class="cfg-switch-linha" id="cfg-switch-adulto" tabindex="0">
+                            <span class="cfg-switch"><span class="cfg-switch-bola"></span></span>
+                            <span class="cfg-switch-texto">Bloqueio Adulto: <strong id="cfg-adulto-estado">Desligado</strong></span>
+                        </button>
+                        <p class="cfg-nota">Quando ligado, categorias adultas deixam de aparecer em TV ao vivo, Filmes e Séries.</p>
+                    </div>
+                </section>
+
+                <!-- Informações -->
+                <section class="cfg-painel" data-painel="informacoes">
+                    <h2 class="cfg-painel-titulo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        Informações da Assinatura
+                    </h2>
+                    <div class="cfg-grade" id="cfg-info-grade">
+                        <div class="cfg-info-vazio">Carregando…</div>
+                    </div>
+                </section>
+
+                <!-- Atualização -->
+                <section class="cfg-painel" data-painel="atualizacao">
+                    <h2 class="cfg-painel-titulo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+                        Atualização
+                    </h2>
+                    <div class="cfg-cartao">
+                        <div class="cfg-info-item">
+                            <div class="cfg-info-rotulo">Versão instalada</div>
+                            <div class="cfg-info-valor" id="cfg-versao-atual">—</div>
+                        </div>
+                        <button class="cfg-opcao" id="cfg-btn-verificar" tabindex="0" style="margin-top:16px; flex:0 0 auto;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+                            <span>Verificar atualização</span>
+                        </button>
+                        <p class="cfg-nota" id="cfg-update-status"></p>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
     <!-- Modal VOD -->
     <div id="vod-detail-screen" style="display:none; position:fixed; inset:0; z-index:9000; align-items:center; justify-content:center; background:rgba(0,0,0,0.85); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);">
         
@@ -298,7 +431,7 @@
         <!-- Loader Principal (Enquanto busca TMDB) -->
         <div id="vod-detail-main-loader" class="spinner" style="--spinner-size:48px;position:absolute;z-index:3;display:none;"></div>
 
-        <div id="vod-modal-inner" style="position:relative; width:980px; max-width:94vw; max-height:92vh; border-radius:18px; overflow:hidden; display:flex; padding:32px; background:rgba(18,16,14,0.7); box-shadow:0 32px 80px rgba(0,0,0,0.9); box-sizing:border-box; opacity:0; transition:opacity 0.4s ease; z-index:2; border:1px solid rgba(255,255,255,0.05);">
+        <div id="vod-modal-inner" style="position:relative; width:980px; max-width:1203px; max-height:662px; border-radius:18px; overflow:hidden; display:flex; padding:32px; background:rgba(18,16,14,0.7); box-shadow:0 32px 80px rgba(0,0,0,0.9); box-sizing:border-box; opacity:0; transition:opacity 0.4s ease; z-index:2; border:1px solid rgba(255,255,255,0.05);">
 
             <!-- Poster esquerdo -->
             <div style="position:relative; z-index:2; flex-shrink:0;">
@@ -412,7 +545,7 @@
         </div>
     </div>
     
-    <div id="fs-player-container" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 99999; background: black;">
+    <div id="fs-player-container" style="display: none; position: fixed; top: 0; left: 0; width: var(--tv-w); height: var(--tv-h); z-index: 99999; background: black;">
         <video id="fullscreen-player" class="premium-video-player" playsinline style="width: 100%; height: 100%;"></video>
         <div id="fs-ui" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.8) 100%); transition: opacity 0.3s; opacity: 1;">
             
@@ -464,6 +597,8 @@
             </div>
         </div>
     </div>
+
+</div><!-- /#tv-canvas -->
 
     <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
     <script src="app.js?v=1.0.10"></script>
