@@ -2,7 +2,10 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1280, user-scalable=no">
+    <!-- device-width, não 1280: o app desativou useWideViewPort na WebView (por
+         causa do canvas de escala do index.html). Esta demo tem layout fluido
+         (flexbox), então preenche a tela reportando a largura real. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <title>BLACK - Demo</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
     <style>

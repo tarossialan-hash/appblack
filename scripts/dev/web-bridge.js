@@ -6,7 +6,11 @@ class WebBridge {
         this.movies = null;
         this.series = null;
         this.searchDataPromise = null;
-        this.simulatedVersion = localStorage.getItem('wb_simulated_version') || "1.0.0";
+        // Versão fixa no código. Antes vinha do localStorage, mas o simulador
+        // de update (removido) gravava "1.0.2 (Web)" lá e isso persistia entre
+        // reloads. Limpa o resíduo para o valor antigo não reaparecer.
+        localStorage.removeItem('wb_simulated_version');
+        this.simulatedVersion = "1.0.0";
 
         // Se já tiver credenciais salvas, começa a buscar em segundo plano
         if (this.serverUrl && this.username && this.password) {
@@ -414,52 +418,9 @@ class WebBridge {
         }
     }
 
-    checkForUpdates() {
-        console.log("🌐 WebBridge: Simulando checagem de atualizações...");
-        // Mostra update se versão for menor que 1.0.2
-        const needsUpdate = this.simulatedVersion.includes("1.0.0") || this.simulatedVersion.includes("1.0.1");
-        if (needsUpdate) {
-            setTimeout(() => {
-                if (typeof showUpdateModal === 'function') {
-                    showUpdateModal('1.0.2', 'https://raw.githubusercontent.com/tarossialan-hash/appblack/main/app-release.apk');
-                }
-            }, 1500);
-        }
-    }
-
-    downloadAndInstallApk(apkUrl) {
-        console.log("🌐 WebBridge: Simulando download do APK:", apkUrl);
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += 10;
-            if (typeof updateDownloadProgress === 'function') {
-                updateDownloadProgress(progress);
-            }
-            if (progress >= 100) {
-                clearInterval(interval);
-                setTimeout(() => {
-                    // Salva a versão simulada no localStorage para persistir nos reloads!
-                    localStorage.setItem('wb_simulated_version', '1.0.2 (Web)');
-                    
-                    // Fecha o modal de atualização
-                    if (typeof fecharUpdateModal === 'function') {
-                        fecharUpdateModal();
-                    }
-                    
-                    // Esconde as pílulas/badges
-                    const navBtn = document.getElementById('nav-update-btn');
-                    if (navBtn) navBtn.style.display = 'none';
-                    const loginBtn = document.getElementById('login-update-btn');
-                    if (loginBtn) loginBtn.style.display = 'none';
-                    
-                    // Simula reinício automático do app recarregando a página
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 500);
-                }, 500);
-            }
-        }, 300);
-    }
+    // checkForUpdates/downloadAndInstallApk (simulador antigo) foram removidos:
+    // o verificador real vive no app.js (verificarAtualizacao), que lê o
+    // version.json do repositório. Ninguém chamava estes métodos.
 
     getRecentMovies() {
         if (this.movies) {
