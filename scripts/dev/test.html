@@ -62,15 +62,17 @@
             width: 100%;
             max-width: 650px;
             aspect-ratio: 2 / 1;
-            background: linear-gradient(135deg, #1dd1a1 0%, #10b981 100%);
-            border: 3px solid #1dd1a1;
+            background: linear-gradient(135deg, #17a67f 0%, #0d6e56 100%);
+            border: 3px solid #17a67f;
             border-radius: 24px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             gap: 24px;
-            box-shadow: 0 20px 60px rgba(29, 209, 161, 0.3);
+            /* Halo contido: a 0.3 num verde saturado ele virava um brilho que
+               estourava contra o fundo preto */
+            box-shadow: 0 14px 34px rgba(13, 110, 86, 0.28);
         }
 
         .hero-icon {
@@ -141,11 +143,11 @@
         }
 
         .btn-reload {
-            background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+            background: linear-gradient(135deg, #5b3a9e 0%, #6d4fae 100%);
         }
 
         .btn-language {
-            background: linear-gradient(135deg, #ff6b35 0%, #ff8555 100%);
+            background: linear-gradient(135deg, #c25a30 0%, #cf7048 100%);
         }
 
         .btn-logout {
@@ -175,7 +177,7 @@
             background: rgba(29, 209, 161, 0.1);
             border: 1px solid rgba(29, 209, 161, 0.3);
             border-radius: 8px;
-            color: #1dd1a1;
+            color: #2bbd94;
             font-weight: 600;
         }
     </style>
@@ -191,7 +193,7 @@
         </div>
 
         <div class="content">
-            <button class="hero-card" onclick="window.location.href='livetv-demo.html'" style="border: none; background: linear-gradient(135deg, #1dd1a1 0%, #10b981 100%); cursor: pointer;">
+            <button class="hero-card" onclick="window.location.href='livetv-demo.html'" style="border: none; background: linear-gradient(135deg, #17a67f 0%, #0d6e56 100%); cursor: pointer;">
                 <div class="hero-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>

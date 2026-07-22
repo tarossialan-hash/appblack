@@ -7,10 +7,10 @@ const { URL } = require('url');
 const PORT = 3000;
 // Absoluto: o servidor roda de qualquer diretório
 const ASSETS = path.join(__dirname, '..', '..', 'app', 'src', 'main', 'assets');
-// O web-bridge vive fora de assets/ de propósito — no APK ele seria peso morto,
-// já que o AndroidApp real é injetado pelo WebView. Aqui no browser ele é o
-// substituto, então o servidor o entrega e injeta a tag só nesta versão de dev.
-const WEB_BRIDGE = path.join(__dirname, 'web-bridge.js');
+// Esta pasta guarda o que é só de desenvolvimento e não deve ir no APK:
+// o web-bridge (substituto do AndroidApp no navegador) e as páginas de
+// demonstração. O servidor a usa como segunda fonte dos arquivos estáticos.
+const DEV = __dirname;
 // Mesma key usada pelo app nativo (NetworkModule.kt)
 const TMDB_API_KEY = process.env.TMDB_API_KEY || 'e8a5a7a31529ab1a19de1ffb7a09b0b5';
 
@@ -271,25 +271,32 @@ http.createServer(async (req, res) => {
         return;
     }
 
-    // === web-bridge.js: mora em scripts/dev/, não em assets/ ===
-    if (pathname === '/web-bridge.js') {
-        return fs.readFile(WEB_BRIDGE, (err, data) => {
-            if (err) { res.writeHead(404); return res.end('web-bridge.js não encontrado'); }
-            res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-store' });
-            res.end(data);
-        });
-    }
-
     // === Static files ===
+    // Procura primeiro em assets/ (o que vai no APK) e, se não achar, em
+    // scripts/dev/ — onde vivem o web-bridge e as páginas de demonstração, que
+    // não devem ser empacotadas. Assim as URLs de sempre continuam valendo.
     let filePath = pathname === '/' ? '/index.html' : pathname;
-    let file = path.join(ASSETS, filePath);
 
-    fs.readFile(file, (err, data) => {
-        if (err) {
+    const resolverSeguro = (base) => {
+        const alvo = path.resolve(base, '.' + filePath);
+        // Barra tentativa de sair da pasta via ../
+        return alvo.startsWith(path.resolve(base)) ? alvo : null;
+    };
+
+    const candidatos = [resolverSeguro(ASSETS), resolverSeguro(DEV)].filter(Boolean);
+
+    const tentar = (i) => {
+        if (i >= candidatos.length) {
             res.writeHead(404);
-            res.end('404');
-            return;
+            return res.end('404');
         }
+        fs.readFile(candidatos[i], (err, data) => {
+            if (err) return tentar(i + 1);
+            entregar(candidatos[i], data);
+        });
+    };
+
+    const entregar = (file, data) => {
         let type = 'text/html';
         if (file.endsWith('.js')) type = 'application/javascript';
         if (file.endsWith('.css')) type = 'text/css';
@@ -311,7 +318,9 @@ http.createServer(async (req, res) => {
 
         res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' });
         res.end(data);
-    });
+    };
+
+    tentar(0);
 }).listen(PORT, () => {
     console.log(`\n🌐 http://localhost:${PORT}`);
     console.log(`   Proxy Xtream: POST /api/xtream ${TMDB_API_KEY ? '' : '(TMDB desativado, sem key)'}\n`);

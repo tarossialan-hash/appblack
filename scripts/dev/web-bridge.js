@@ -6,7 +6,7 @@ class WebBridge {
         this.movies = null;
         this.series = null;
         this.searchDataPromise = null;
-        this.simulatedVersion = localStorage.getItem('wb_simulated_version') || "1.0.0 (Web)";
+        this.simulatedVersion = localStorage.getItem('wb_simulated_version') || "1.0.0";
 
         // Se já tiver credenciais salvas, começa a buscar em segundo plano
         if (this.serverUrl && this.username && this.password) {
@@ -523,6 +523,118 @@ class WebBridge {
 
     getAppVersion() {
         return this.simulatedVersion;
+    }
+
+    /**
+     * Nunca é TV: aqui estamos no navegador, onde existe teclado de verdade.
+     * Precisa existir porque o app.js usa a ausência do método para deduzir
+     * "APK antigo" e, nesse caso, manter o teclado virtual ligado.
+     */
+    isTv() {
+        return false;
+    }
+
+    // ---- Configurações ----
+
+    getFormatoLive() {
+        return localStorage.getItem('formato_live') || 'ts';
+    }
+
+    setFormatoLive(formato) {
+        localStorage.setItem('formato_live', formato === 'm3u8' ? 'm3u8' : 'ts');
+    }
+
+    /** Mesma chamada do login (player_api.php sem action) devolve user_info. */
+    getUserInfo() {
+        const responder = (obj) => {
+            if (typeof onUserInfoLoaded === 'function') {
+                onUserInfoLoaded(JSON.stringify(obj));
+            }
+        };
+
+        this._apiCall('').then(dados => {
+            const info = dados && dados.user_info;
+            if (!info) return responder({ ok: false, erro: 'Servidor nao retornou os dados da conta.' });
+
+            const fuso = (dados.server_info && dados.server_info.timezone) || 'America/Sao_Paulo';
+            let expiracao = 'Sem vencimento';
+            const seg = parseInt(info.exp_date, 10);
+            if (!isNaN(seg)) {
+                expiracao = new Date(seg * 1000)
+                    .toLocaleString('pt-BR', { timeZone: fuso, dateStyle: 'short', timeStyle: 'short' }) +
+                    ' (' + fuso + ')';
+            }
+
+            responder({
+                ok: true,
+                username: info.username || '',
+                status: info.status || '',
+                maxConnections: info.max_connections || '',
+                timezone: fuso,
+                allowedFormats: (info.allowed_output_formats || []).map(f => String(f).toUpperCase()).join(', '),
+                expDate: expiracao
+            });
+        }).catch(e => responder({ ok: false, erro: 'Falha ao consultar a assinatura.' }));
+    }
+
+    // ---- Favoritos ----
+    // Espelha o FavoritosManager do Android (que grava em SharedPreferences)
+    // usando localStorage. Mesma assinatura e mesmo formato de retorno, para o
+    // app.js não precisar saber em qual dos dois está rodando.
+
+    _favoritos() {
+        try {
+            const bruto = JSON.parse(localStorage.getItem('wb_favoritos') || '[]');
+            return Array.isArray(bruto) ? bruto : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    _salvarFavoritos(lista) {
+        try { localStorage.setItem('wb_favoritos', JSON.stringify(lista)); } catch (e) {}
+    }
+
+    /** Alterna e devolve true se o item ficou favorito, false se saiu. */
+    addFavorite(json) {
+        let item;
+        try { item = JSON.parse(json); } catch (e) { return false; }
+        if (!item || !item.id) return false;
+
+        const tipo = ['series', 'live'].includes(item.tipo) ? item.tipo : 'movie';
+        const lista = this._favoritos();
+        const i = lista.findIndex(f => f.id === item.id && f.tipo === tipo);
+
+        if (i >= 0) {
+            lista.splice(i, 1);
+            this._salvarFavoritos(lista);
+            return false;
+        }
+
+        lista.push({
+            id: item.id,
+            titulo: item.titulo || '',
+            posterPath: item.posterPath || '',
+            tipo: tipo
+        });
+        this._salvarFavoritos(lista);
+        return true;
+    }
+
+    isFavorite(id, tipo) {
+        return this._favoritos().some(f => f.id === id && f.tipo === tipo);
+    }
+
+    /** Mesmo formato de getLiveChannels, para reusar o onLiveChannelsLoaded. */
+    getFavoriteChannels() {
+        const canais = this._favoritos()
+            .filter(f => f.tipo === 'live')
+            .sort((a, b) => String(a.titulo).localeCompare(String(b.titulo), 'pt-BR'))
+            .map(f => ({ streamId: f.id, name: f.titulo, icon: f.posterPath || '' }));
+
+        if (typeof onLiveChannelsLoaded === 'function') {
+            onLiveChannelsLoaded(JSON.stringify(canais));
+        }
     }
 }
 
