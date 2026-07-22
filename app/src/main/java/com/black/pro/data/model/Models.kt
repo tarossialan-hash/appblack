@@ -13,7 +13,10 @@ data class UserInfo(
     @SerializedName("exp_date") val expDate: String?,
     @SerializedName("is_trial") val isTrial: String?,
     @SerializedName("active_cons") val activeCons: String?,
-    @SerializedName("max_connections") val maxConnections: String?
+    @SerializedName("max_connections") val maxConnections: String?,
+    // Formatos que o provedor libera para esta conta (ex.: ["m3u8","ts"]).
+    // É o que define quais opções de player fazem sentido oferecer.
+    @SerializedName("allowed_output_formats") val allowedOutputFormats: List<String>? = null
 )
 
 data class ServerInfo(

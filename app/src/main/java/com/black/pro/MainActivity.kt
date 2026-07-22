@@ -54,12 +54,27 @@ class MainActivity : ComponentActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             allowFileAccess = true
+            // A página vive em file:///android_asset/, ou seja, origem opaca. O
+            // mpegts.js busca o .ts por XHR, o que conta como cross-origin e o
+            // WebView bloqueia por padrão — o erro chega como NETWORK_ERROR e o
+            // player entra no laço de "Reconectando (n/3)" sem nunca abrir o
+            // canal. WebViews antigas de TV eram permissivas; as atuais (S24)
+            // aplicam a regra, por isso falhava só no celular.
+            //
+            // Seguro aqui porque a WebView carrega exclusivamente o index.html
+            // empacotado no APK — nunca conteúdo remoto ou de terceiros.
+            allowUniversalAccessFromFileURLs = true
             mediaPlaybackRequiresUserGesture = false // Importante para vídeos em TV
-            
-            // Habilita o modo de visão geral para escalar o layout de 1280px automaticamente
-            useWideViewPort = true 
-            loadWithOverviewMode = true
-            textZoom = 100 
+
+            // Quem escala o layout agora é o CSS (#tv-canvas, canvas fixo de
+            // 1280x720 + transform). O WebView deve entregar o viewport real,
+            // sem zoom próprio: com estes ligados as duas escalas se somavam e
+            // distorciam o layout em painéis fora de 16:9.
+            useWideViewPort = false
+            loadWithOverviewMode = false
+            // Trava o zoom de texto: a acessibilidade do sistema aumentaria a
+            // fonte e quebraria as medidas fixas do canvas.
+            textZoom = 100
         }
 
         // Previne que links abram no navegador externo e contorna erros de Handshake SSL
@@ -109,6 +124,30 @@ class MainActivity : ComponentActivity() {
      * encerramos de vez, liberando o decodificador de vídeo e a conexão do stream.
      * Na próxima abertura o app inicia limpo (a sessão salva mantém o login).
      */
+    /**
+     * Chamado sempre que a Activity deixa de estar visível.
+     *
+     * Rede de segurança para o visibilitychange do app.js: nem toda WebView de
+     * TV dispara o evento de forma confiável quando o painel apaga ou o sistema
+     * põe algo por cima. Aqui a garantia é do Android, não do WebView.
+     *
+     * Cobre o que o onUserLeaveHint não pega — ele só dispara quando o usuário
+     * sai por ação própria (Home/Recentes), não quando o app perde a tela por
+     * descanso de tela, diálogo do sistema ou chamada entrando.
+     *
+     * Parar é idempotente, então não há problema em rodar duas vezes.
+     */
+    override fun onStop() {
+        super.onStop()
+        try {
+            webView.evaluateJavascript(
+                "javascript:if(typeof window.pararTudo === 'function') { window.pararTudo(); }",
+                null
+            )
+        } catch (_: Exception) {
+        }
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         pararReproducaoEFechar()

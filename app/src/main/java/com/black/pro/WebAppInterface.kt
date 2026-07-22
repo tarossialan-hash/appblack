@@ -1,6 +1,10 @@
 package com.black.pro
 
 import android.app.Activity
+import android.app.UiModeManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.black.pro.ui.IPTVViewModel
@@ -111,7 +115,12 @@ class WebAppInterface(
                 obj.put("title", item.title)
                 obj.put("overview", item.overview)
                 // Adiciona o prefixo do TMDB para facilitar
-                obj.put("backdropUrl", if (item.backdropPath.isNotEmpty()) "https://image.tmdb.org/t/p/original${item.backdropPath}" else "")
+                // w1280, não "original": o original vem em 3840x2160 e pesa de 2 a 5 MB
+                // por destaque. Como são até 10 destaques validados antes de o banner
+                // aparecer, isso somava dezenas de MB numa TV — em link degradado a tela
+                // ficava preta por muito tempo. O banner ocupa ~960px de largura no
+                // canvas, então w1280 já sobra.
+                obj.put("backdropUrl", if (item.backdropPath.isNotEmpty()) "https://image.tmdb.org/t/p/w1280${item.backdropPath}" else "")
                 obj.put("logoUrl", if (item.logoPath != null) "https://image.tmdb.org/t/p/w500${item.logoPath}" else "")
                 obj.put("releaseYear", item.releaseYear)
                 obj.put("voteAverage", item.voteAverage)
@@ -175,11 +184,73 @@ class WebAppInterface(
         }
     }
 
+    // ---------- Configurações ----------
+
+    private val prefs
+        get() = activity.getSharedPreferences("black_app_prefs", android.content.Context.MODE_PRIVATE)
+
+    /** "ts" (MPEGTS) ou "m3u8" (HLS). O provedor informa quais aceita em allowed_output_formats. */
+    @JavascriptInterface
+    fun getFormatoLive(): String = prefs.getString("formato_live", "ts") ?: "ts"
+
+    @JavascriptInterface
+    fun setFormatoLive(formato: String) {
+        val valido = if (formato == "m3u8") "m3u8" else "ts"
+        prefs.edit().putString("formato_live", valido).apply()
+    }
+
     @JavascriptInterface
     fun getStreamUrl(streamId: Int): String {
         val u = sessionManager.getUsername() ?: return ""
         val p = sessionManager.getPassword() ?: return ""
-        return "http://bkpac.cc/live/$u/$p/$streamId.ts"
+        // A extensão sai daqui, e não do JS, para a URL ser montada num lugar só
+        return "http://bkpac.cc/live/$u/$p/$streamId.${getFormatoLive()}"
+    }
+
+    /**
+     * Dados da assinatura, do próprio player_api.php (a mesma chamada do login,
+     * sem action, devolve user_info + server_info).
+     */
+    @JavascriptInterface
+    fun getUserInfo() {
+        val u = sessionManager.getUsername() ?: return
+        val p = sessionManager.getPassword() ?: return
+        CoroutineScope(Dispatchers.IO).launch {
+            val obj = JSONObject()
+            try {
+                val resp = NetworkModule.iptvService.login(u, p)
+                val info = resp.userInfo
+                val srv = resp.serverInfo
+                val fuso = srv?.timezone ?: "America/Sao_Paulo"
+
+                obj.put("username", info?.username ?: u)
+                obj.put("status", info?.status ?: "")
+                obj.put("maxConnections", info?.maxConnections ?: "")
+                obj.put("timezone", fuso)
+                obj.put("allowedFormats", (info?.allowedOutputFormats ?: emptyList())
+                    .joinToString(", ") { it.uppercase() })
+                obj.put("expDate", formatarExpiracao(info?.expDate, fuso))
+                obj.put("ok", true)
+            } catch (e: Exception) {
+                obj.put("ok", false)
+                obj.put("erro", e.message ?: "Falha ao consultar a assinatura")
+            }
+            withContext(Dispatchers.Main) {
+                webView.evaluateJavascript("javascript:onUserInfoLoaded('${escapeJs(obj.toString())}')", null)
+            }
+        }
+    }
+
+    /** exp_date vem como epoch em segundos; vazio ou nulo significa sem vencimento. */
+    private fun formatarExpiracao(expDate: String?, fuso: String): String {
+        val segundos = expDate?.toLongOrNull() ?: return "Sem vencimento"
+        return try {
+            val fmt = java.text.SimpleDateFormat("dd/MM/yyyy, HH:mm", java.util.Locale("pt", "BR"))
+            fmt.timeZone = java.util.TimeZone.getTimeZone(fuso)
+            "${fmt.format(java.util.Date(segundos * 1000))} ($fuso)"
+        } catch (e: Exception) {
+            "Sem vencimento"
+        }
     }
 
     @JavascriptInterface
@@ -383,6 +454,10 @@ class WebAppInterface(
                     obj.put("description", epg.description)
                     obj.put("start", epg.start)
                     obj.put("end", epg.end)
+                    // Alguns provedores deixam start/end vazios ou num formato
+                    // inesperado; os timestamps são o plano B do lado do JS.
+                    obj.put("startTimestamp", epg.startTimestamp ?: "")
+                    obj.put("endTimestamp", epg.endTimestamp ?: "")
                     jsonArray.put(obj)
                 }
                 withContext(Dispatchers.Main) {
@@ -443,6 +518,30 @@ class WebAppInterface(
     }
 
 
+    /**
+     * Distingue TV de celular/tablet.
+     *
+     * O teclado virtual da interface só faz sentido na TV, onde há apenas o
+     * D-pad. No celular ele atrapalha: o aparelho já tem teclado próprio.
+     *
+     * Duas checagens porque nenhuma cobre tudo: UI_MODE_TYPE_TELEVISION falha
+     * em algumas TV boxes que se declaram como celular, e FEATURE_LEANBACK
+     * falha em TVs sem a interface Leanback instalada.
+     */
+    @JavascriptInterface
+    fun isTv(): Boolean {
+        return try {
+            val modo = (activity.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager)
+                ?.currentModeType
+            modo == Configuration.UI_MODE_TYPE_TELEVISION ||
+                activity.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        } catch (e: Exception) {
+            // Na dúvida assume TV: é o alvo principal do app, e lá o teclado
+            // virtual é o único jeito de digitar.
+            true
+        }
+    }
+
     @JavascriptInterface
     fun getAppVersion(): String {
         return try {
@@ -472,11 +571,14 @@ class WebAppInterface(
             val o = JSONObject(json)
             val id = o.optInt("id")
             if (id == 0) return false
+            // "live" entrou junto com os favoritos de canal; o padrão segue "movie"
+            // para qualquer valor desconhecido.
+            val tipoRecebido = o.optString("tipo")
             val item = FavoritoItem(
                 id = id,
                 titulo = o.optString("titulo"),
                 posterPath = o.optString("posterPath").takeIf { it.isNotBlank() },
-                tipo = if (o.optString("tipo") == "series") "series" else "movie"
+                tipo = if (tipoRecebido in setOf("series", "live")) tipoRecebido else "movie"
             )
             val ctx = activity.applicationContext
             FavoritosManager.toggle(ctx, item)
@@ -490,6 +592,34 @@ class WebAppInterface(
     @JavascriptInterface
     fun isFavorite(id: Int, tipo: String): Boolean {
         return FavoritosManager.isFavorito(activity.applicationContext, id, tipo)
+    }
+
+    /**
+     * Canais favoritos, no mesmo formato de getLiveChannels — assim a categoria
+     * FAVORITOS reaproveita o onLiveChannelsLoaded que já existe, sem precisar
+     * de outro renderizador na tela de TV ao vivo.
+     */
+    @JavascriptInterface
+    fun getFavoriteChannels() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val jsonArray = JSONArray()
+            try {
+                FavoritosManager.getByTipo(activity.applicationContext, "live")
+                    .sortedBy { it.titulo.trim().lowercase() }
+                    .forEach { fav ->
+                        val obj = JSONObject()
+                        obj.put("streamId", fav.id)
+                        obj.put("name", fav.titulo)
+                        obj.put("icon", fav.posterPath ?: "")
+                        jsonArray.put(obj)
+                    }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            withContext(Dispatchers.Main) {
+                webView.evaluateJavascript("javascript:onLiveChannelsLoaded('${escapeJs(jsonArray.toString())}')", null)
+            }
+        }
     }
 
     @JavascriptInterface
