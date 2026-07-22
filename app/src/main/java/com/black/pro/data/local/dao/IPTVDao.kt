@@ -34,6 +34,9 @@ interface IPTVDao {
     @Query("SELECT * FROM movies ORDER BY streamId DESC LIMIT 20")
     fun getRecentMovies(): Flow<List<MovieEntity>>
 
+    @Query("SELECT * FROM movies WHERE name LIKE '%' || :query || '%' ORDER BY name LIMIT 50")
+    suspend fun searchMovies(query: String): List<MovieEntity>
+
     @Query("DELETE FROM movies")
     suspend fun clearMovies()
 
@@ -45,6 +48,9 @@ interface IPTVDao {
 
     @Query("SELECT * FROM series ORDER BY seriesId DESC LIMIT 20")
     fun getRecentSeries(): Flow<List<SeriesEntity>>
+
+    @Query("SELECT * FROM series WHERE name LIKE '%' || :query || '%' ORDER BY name LIMIT 50")
+    suspend fun searchSeries(query: String): List<SeriesEntity>
 
     @Query("DELETE FROM series")
     suspend fun clearSeries()

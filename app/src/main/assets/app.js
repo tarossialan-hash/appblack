@@ -56,6 +56,11 @@ function updateSyncProgress(percent, statusText) {
 
 function onLoginSuccess(username) {
     localStorage.setItem('logged_in_user', username);
+    // Garante que o teclado virtual não fique aberto ao entrar na home
+    const vkEl = document.getElementById('virtual-keyboard');
+    if (vkEl) vkEl.style.display = 'none';
+    isKeyboardOpen = false;
+    currentInput = null;
     if (window.AndroidApp) {
         document.getElementById("sync-screen").style.display = "none";
         document.getElementById("login-screen").style.display = "none";
@@ -113,19 +118,53 @@ function onLoginError(message) {
     } else if (message.includes("timeout") || message.includes("connect") || message.includes("Unable to resolve host")) {
         friendlyMessage = "Falha de conexão com o servidor. Tente novamente.";
     }
-    
     document.getElementById("login-status").innerText = friendlyMessage;
 }
 
-function sair() {
-    localStorage.removeItem('logged_in_user');
-    document.getElementById("login-screen").style.display = "flex";
-    document.getElementById("home-screen").style.display = "none";
-    document.getElementById("login-status").innerText = "";
-    setTimeout(() => {
-        const usernameInput = document.getElementById('username');
-        if (usernameInput) usernameInput.focus();
-    }, 100);
+let lastFocusedBeforeLogout = null;
+function abrirLogoutModal() {
+    const modal = document.getElementById('logout-confirm-modal');
+    if (modal) {
+        lastFocusedBeforeLogout = document.activeElement;
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('show'), 10);
+        setTimeout(() => {
+            const btnNo = document.getElementById('logout-btn-no');
+            if (btnNo) btnNo.focus();
+        }, 100);
+    }
+}
+
+function fecharLogoutModal() {
+    const modal = document.getElementById('logout-confirm-modal');
+    if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+            if (lastFocusedBeforeLogout) {
+                lastFocusedBeforeLogout.focus();
+                lastFocusedBeforeLogout = null;
+            }
+        }, 300);
+    }
+}
+
+function confirmarLogout() {
+    // Desconecta a sessão nativa (SharedPreferences criptografado) no APK
+    try {
+        if (window.AndroidApp && typeof window.AndroidApp.logout === 'function') {
+            window.AndroidApp.logout();
+        }
+    } catch (e) {
+        console.error('Erro ao desconectar sessão nativa:', e);
+    }
+
+    // Limpa todas as credenciais/estado salvos no navegador
+    ['logged_in_user', 'wb_user', 'wb_pass', 'wb_url', 'vodDetailItem', 'vodDetailIsSeries']
+        .forEach(k => localStorage.removeItem(k));
+
+    // Força recarregamento da WebView para voltar estado zero (idêntico ao F5)
+    window.location.reload();
 }
 
 function recarregar() {
@@ -138,7 +177,9 @@ function recarregar() {
     document.getElementById("sync-status-text").innerText = "Sincronizando banco de dados...";
     document.getElementById("sync-progress").style.width = "0%";
     
-    if (window.AndroidApp && user && pass) {
+    if (window.AndroidApp && typeof window.AndroidApp.sync === 'function') {
+        window.AndroidApp.sync();
+    } else if (window.AndroidApp && user && pass) {
         window.AndroidApp.login(user, pass);
     } else {
         // Modo Web: simula a sincronização para não dar reload infinito e carregar atualizado
@@ -240,7 +281,8 @@ function mostrarCategoria(btn, cat) {
     if (cat === 'inicio') {
         document.querySelector('.home-scroll-area').style.display = 'block';
         document.getElementById('live-tv-screen').style.display = 'none';
-        
+        document.getElementById('vod-tv-screen').style.display = 'none'; // fix: escondia live mas não vod
+
         const bannerContainer = document.getElementById('dynamic-hero-banner');
         if (bannerContainer) bannerContainer.style.display = 'block';
         
@@ -392,15 +434,58 @@ function onBannerItemsLoaded(jsonString) {
         render(0);
     }
 
+    // Ícones de linha (Lucide-style) para a barra de metadados do banner
+    const SPOT_ICONS = {
+        tipo: '<path d="M7 3v18M17 3v18M3 7.5h4M3 12h18M3 16.5h4M17 7.5h4M17 16.5h4"/><rect x="3" y="3" width="18" height="18" rx="2"/>',
+        data: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+        duracao: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+        pais: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+        genero: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>'
+    };
+
+    function spotItem(iconKey, texto) {
+        if (!texto) return '';
+        return `<span class="spotlight-meta-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SPOT_ICONS[iconKey]}</svg>
+            <span>${texto}</span>
+        </span>`;
+    }
+
+    // Formata "2026-06-03" para "03/06/2026"
+    function formatarData(d) {
+        if (!d) return '';
+        const p = String(d).split('-');
+        if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+        return d;
+    }
+
+    function construirSpotlightMeta(item) {
+        const tipo = item.typeLabel || (item.mediaType === 'tv' ? 'Série' : 'Filme');
+        const data = formatarData(item.releaseDate) || item.releaseYear || '';
+        const nota = item.voteAverage ? parseFloat(item.voteAverage).toFixed(1) : '';
+
+        const notaHtml = nota
+            ? `<span class="spotlight-meta-item rating">
+                   <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                   <span>${nota}</span>
+               </span>` : '';
+
+        return [
+            spotItem('tipo', tipo),
+            spotItem('data', data),
+            spotItem('duracao', item.runtime || ''),
+            notaHtml,
+            spotItem('pais', item.country || ''),
+            spotItem('genero', item.genres || '')
+        ].join('');
+    }
+
     function render(index) {
         const item = items[index];
         const backdrop = item.backdropUrl || '';
         const poster   = posterUrl(item);
 
-        const ratingChip = item.voteAverage
-            ? `<span class="spotlight-chip rating">&#9733; ${parseFloat(item.voteAverage).toFixed(1)}</span>` : '';
-        const yearChip = item.releaseYear
-            ? `<span class="spotlight-chip">${item.releaseYear}</span>` : '';
+        const metaHtml = construirSpotlightMeta(item);
 
         const thumbsHtml = items.map((m, i) =>
             `<img class="spotlight-thumb${i === index ? ' active' : ''}"
@@ -431,9 +516,8 @@ function onBannerItemsLoaded(jsonString) {
 
             <div class="spotlight-content">
                 <div class="spotlight-info">
-                    <div class="spotlight-badge">&#9654; Novidade</div>
                     ${titleHtml}
-                    <div class="spotlight-meta">${ratingChip}${yearChip}</div>
+                    <div class="spotlight-meta">${metaHtml}</div>
                     <div class="spotlight-overview">${item.overview || ''}</div>
                     <div class="spotlight-progress-bar">
                         <div class="spotlight-progress-fill" id="sp-progress"></div>
@@ -505,22 +589,42 @@ function onRecentMoviesLoaded(jsonString) {
         div.className = 'vod-item';
         div.tabIndex = 0;
         
-        let iconHtml = m.streamIcon ? `<img src="${m.streamIcon}" class="vod-item-poster" onerror="this.style.display='none'">` : '';
+        let iconHtml = m.streamIcon ? `<img src="${otimizarCapa(m.streamIcon)}" class="vod-item-poster" loading="lazy" decoding="async" onerror="this.style.display='none'">` : '';
         const movieName = m.name || '';
+        const badgeContainer = construirBadges(movieName);
         let cleanTitle = movieName.replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, ' ').replace(/\b(4K|FHD|UHD|1080p|720p|LEG|DUB|DUBLADO|LEGENDADO|CAM|TS|HDTS|TELESYNC)\b/gi, ' ').trim();
-        
-        div.innerHTML = `${iconHtml}<div class="vod-item-title">${cleanTitle}</div>`;
-        
+
+        div.innerHTML = `${iconHtml}${badgeContainer}<div class="vod-item-title">${cleanTitle}</div>`;
+
         div.onclick = () => {
             openVodModal(m, false);
         };
-        
+
         div.onkeydown = (e) => {
-            if (e.key === "Enter") div.click();
+            if (e.key === "Enter") { e.preventDefault(); div.click(); }
         };
-        
+
         container.appendChild(div);
     });
+}
+
+// O provedor entrega capas do TMDB em w500/w600, mas o espaço na grade tem
+// ~190px (≈285px reais com a escala da WebView). Pedir w342 corta cerca de
+// 3x o trabalho de decodificação por imagem — o que mais pesava ao rolar.
+// URLs que não são do TMDB passam intactas.
+function otimizarCapa(url) {
+    if (!url || url.indexOf('image.tmdb.org') === -1) return url;
+    return url.replace(/\/t\/p\/[^/]+\//, '/t/p/w342/');
+}
+
+// Gera as tags 4K / LEG / CAM a partir do nome do item
+function construirBadges(name) {
+    const upperName = name ? name.toUpperCase() : '';
+    let badgesHtml = '';
+    if (upperName.includes('4K')) badgesHtml += '<div class="badge-4k">4K</div>';
+    if (upperName.includes('LEG') || upperName.includes('LEGENDADO')) badgesHtml += '<div class="badge-leg">LEG</div>';
+    if (upperName.match(/\b(CAM|TS|HDTS|TELESYNC)\b/)) badgesHtml += '<div class="badge-cam">CAM</div>';
+    return badgesHtml ? `<div class="badge-container">${badgesHtml}</div>` : '';
 }
 
 function onRecentSeriesLoaded(jsonString) {
@@ -543,18 +647,19 @@ function onRecentSeriesLoaded(jsonString) {
         div.className = 'vod-item';
         div.tabIndex = 0;
         
-        let iconHtml = s.cover ? `<img src="${s.cover}" class="vod-item-poster" onerror="this.style.display='none'">` : '';
+        let iconHtml = s.cover ? `<img src="${otimizarCapa(s.cover)}" class="vod-item-poster" loading="lazy" decoding="async" onerror="this.style.display='none'">` : '';
         const seriesName = s.name || '';
+        const badgeContainer = construirBadges(seriesName);
         let cleanTitle = seriesName.replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, ' ').replace(/\b(4K|FHD|UHD|1080p|720p|LEG|DUB|DUBLADO|LEGENDADO|CAM|TS|HDTS|TELESYNC)\b/gi, ' ').trim();
-        
-        div.innerHTML = `${iconHtml}<div class="vod-item-title">${cleanTitle}</div>`;
-        
+
+        div.innerHTML = `${iconHtml}${badgeContainer}<div class="vod-item-title">${cleanTitle}</div>`;
+
         div.onclick = () => {
             openVodModal(s, true);
         };
         
         div.onkeydown = (e) => {
-            if (e.key === "Enter") div.click();
+            if (e.key === "Enter") { e.preventDefault(); div.click(); }
         };
         
         container.appendChild(div);
@@ -579,8 +684,7 @@ function onLiveCategoriesLoaded(jsonString) {
         div.innerText = cat.categoryName;
         
         div.onclick = () => {
-            document.querySelectorAll('.live-category-item').forEach(el => el.classList.remove('active'));
-            div.classList.add('active');
+            marcarAtivo('categoriaTv', div);
             if (window.AndroidApp) {
                 window.AndroidApp.getLiveChannels(cat.categoryId);
             } else {
@@ -589,7 +693,7 @@ function onLiveCategoriesLoaded(jsonString) {
         };
         
         div.onkeydown = (e) => {
-            if (e.key === "Enter") div.click();
+            if (e.key === "Enter") { e.preventDefault(); div.click(); }
         };
         
         container.appendChild(div);
@@ -607,6 +711,18 @@ function onLiveCategoriesLoaded(jsonString) {
     }
 }
 
+let _ultimaNavegacao = 0; // marca o instante da ultima navegacao por DPAD
+
+// Troca o item ativo sem varrer a lista inteira.
+// Com 1200+ canais, o querySelectorAll a cada clique custava caro na TV.
+const _ativos = {};
+function marcarAtivo(grupo, elemento) {
+    const anterior = _ativos[grupo];
+    if (anterior && anterior !== elemento) anterior.classList.remove('active');
+    if (elemento) elemento.classList.add('active');
+    _ativos[grupo] = elemento || null;
+}
+
 function onLiveChannelsLoaded(jsonString) {
     let channels = [];
     try { channels = JSON.parse(jsonString); } catch(e) {}
@@ -621,28 +737,20 @@ function onLiveChannelsLoaded(jsonString) {
         div._channelData = ch;
         
         let iconUrl = ch.streamIcon || ch.icon;
-        let iconHtml = iconUrl ? `<img src="${iconUrl}" class="channel-logo" onerror="this.style.display='none'">` : '';
+        let iconHtml = iconUrl ? `<img src="${iconUrl}" class="channel-logo" loading="lazy" decoding="async" onerror="this.style.display='none'">` : '';
         div.innerHTML = `${iconHtml}<span>${ch.name}</span>`;
         
         div.onclick = () => {
             if (div.classList.contains('active')) {
-                // Segundo clique: abre em tela cheia o mini-player SEM recarregar o vídeo
-                const previewContainer = document.querySelector('.live-player-container');
-                if (previewContainer) {
-                    if (previewContainer.requestFullscreen) {
-                        previewContainer.requestFullscreen();
-                    } else if (previewContainer.webkitRequestFullscreen) {
-                        previewContainer.webkitRequestFullscreen();
-                    }
-                }
+                // Segundo clique no canal já ativo: expande o mini-player, sem recarregar o vídeo
+                abrirPlayerTelaCheia();
                 return;
             }
             
             // Primeiro clique: abre no mini-player
-            document.querySelectorAll('.live-channel-item').forEach(el => el.classList.remove('active'));
-            div.classList.add('active');
+            marcarAtivo('canal', div);
             
-            document.getElementById('live-player-title').innerText = "Assistindo: " + ch.name;
+            document.getElementById("live-player-title").innerText = ""; // sem rótulo sobre o vídeo (o elemento segue sendo usado para mensagens de erro)
             
             if (window.AndroidApp) {
                 window.AndroidApp.getEpg(ch.streamId);
@@ -658,9 +766,15 @@ function onLiveChannelsLoaded(jsonString) {
         };
         
         div.onkeydown = (e) => {
-            if (e.key === "Enter") div.click();
+            if (e.key === "Enter") {
+                // No Android TV o OK gera um click sintético além deste keydown.
+                // Sem o preventDefault o handler roda duas vezes: o 1º aperto
+                // ativava o canal e o 2º disparo já abria a tela cheia direto.
+                e.preventDefault();
+                div.click();
+            }
         };
-        
+
         container.appendChild(div);
     });
 }
@@ -826,7 +940,7 @@ window.onSeriesInfoLoaded = function(jsonString) {
                     playFullscreenVideo(streamUrl, ep.title || `Episódio ${ep.episodeNumber}`);
                 }
             };
-            card.onkeydown = (e) => { if (e.key === 'Enter') card.click(); };
+            card.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); card.click(); } };
             episodesContainer.appendChild(card);
         });
     }
@@ -842,7 +956,7 @@ window.onSeriesInfoLoaded = function(jsonString) {
             tab.classList.add('active');
             renderSeasonEpisodes(key);
         };
-        tab.onkeydown = (e) => { if (e.key === 'Enter') tab.click(); };
+        tab.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); tab.click(); } };
 
         tabsContainer.appendChild(tab);
 
@@ -855,16 +969,16 @@ window.onSeriesInfoLoaded = function(jsonString) {
 
 function openVodModal(item, isSeries) {
     window._lastFocusedVodItem = document.activeElement;
-    const topNav = document.querySelector('.top-nav');
-    if (topNav) {
-        window._detailPrevTopNavDisplay = topNav.style.display;
-        topNav.style.display = 'none';
-    }
+    // topNav permanece visível — o overlay do modal cobre a tela
+    window._detailPrevTopNavDisplay = null;
 
     const screen   = document.getElementById('vod-detail-screen');
+    const inner    = document.getElementById('vod-modal-inner');
+    const mainLoader = document.getElementById('vod-detail-main-loader');
     const loader   = document.getElementById('vod-detail-loader');
     const backdrop = document.getElementById('vod-detail-backdrop');
     const poster   = document.getElementById('vod-detail-poster');
+    const badgesSlot = document.getElementById('vod-detail-badges-slot');
     const logoEl   = document.getElementById('vod-detail-logo');
     const titleEl  = document.getElementById('vod-detail-title');
     const origEl   = document.getElementById('vod-detail-original');
@@ -888,12 +1002,23 @@ function openVodModal(item, isSeries) {
     localStorage.setItem('vodDetailItem', JSON.stringify(item));
     localStorage.setItem('vodDetailIsSeries', isSeries ? '1' : '0');
 
-    // Reseta a tela
-    if (loader)   loader.style.display   = 'block';
-    if (backdrop) backdrop.style.backgroundImage = '';
+    // Reseta a tela e prepara loading
+    if (inner) {
+        inner.style.transition = 'none';
+        inner.style.opacity = '0';
+    }
+    if (backdrop) {
+        backdrop.style.transition = 'none';
+        backdrop.style.opacity = '0';
+        backdrop.style.backgroundImage = '';
+    }
+    if (mainLoader) mainLoader.style.display = 'block';
+    
+    // Instantly preload basic data so it's ready on reveal
     if (poster)   { poster.src = isSeries ? (item.cover || '') : (item.streamIcon || ''); }
-    if (logoEl)   { logoEl.style.display = 'none'; logoEl.src = ''; }
+    if (badgesSlot) { badgesSlot.innerHTML = construirBadges(item.name); }
     if (titleEl)  { titleEl.textContent = item.name || ''; titleEl.style.display = 'block'; }
+    if (logoEl)   { logoEl.style.display = 'none'; logoEl.src = ''; }
     if (origEl)   origEl.textContent = '';
     if (overviewEl) overviewEl.textContent = 'Buscando informações...';
     if (dateEl)   dateEl.innerHTML = '';
@@ -904,21 +1029,38 @@ function openVodModal(item, isSeries) {
     if (relRow)   relRow.innerHTML = '';
     if (seriesSection) seriesSection.style.display = 'none';
 
-    // Exibe a tela
+    // Exibe o modal como flex (centra o painel interno)
     screen.style.display = 'flex';
-    screen.scrollTop = 0;
 
     // Botão Voltar Redondo
     const btnBackRound = document.getElementById('vod-detail-screen-back-btn');
     if (btnBackRound) btnBackRound.onclick = closeVodModal;
 
-    // Botão Favoritar (reusa lógica existente se disponível)
+    // Botão Favoritar
     const btnFav = document.getElementById('vod-detail-btn-fav');
     if (btnFav) {
-        btnFav.onclick = () => {
-            if (window.AndroidApp && window.AndroidApp.addFavorite) {
-                window.AndroidApp.addFavorite(JSON.stringify(item));
+        const favId = isSeries ? (item.seriesId || item.streamId) : (item.streamId || item.id);
+        const favTipo = isSeries ? 'series' : 'movie';
+        const marcarFav = (ativo) => {
+            btnFav.classList.toggle('is-favorito', !!ativo);
+            const label = btnFav.lastChild;
+            if (label && label.nodeType === Node.TEXT_NODE) {
+                label.textContent = ativo ? ' Favoritado ' : ' Favoritar ';
             }
+        };
+
+        if (window.AndroidApp && window.AndroidApp.isFavorite) {
+            marcarFav(window.AndroidApp.isFavorite(favId, favTipo));
+        }
+
+        btnFav.onclick = () => {
+            if (!window.AndroidApp || !window.AndroidApp.addFavorite) return;
+            marcarFav(window.AndroidApp.addFavorite(JSON.stringify({
+                id: favId,
+                titulo: item.name || '',
+                posterPath: item.streamIcon || item.cover || '',
+                tipo: favTipo
+            })));
         };
     }
 
@@ -949,15 +1091,26 @@ function openVodModal(item, isSeries) {
     // Busca TMDB
     fetchTmdbData(item.name, isSeries).then(tmdb => {
         window.currentTmdb = tmdb;
+        
+        // Finaliza o carregamento suave
+        if (mainLoader) mainLoader.style.display = 'none';
+        if (inner) {
+            inner.style.transition = 'opacity 0.4s ease';
+            inner.style.opacity = '1';
+        }
         if (loader) loader.style.display = 'none';
 
         if (tmdb) {
-            // Backdrop
+            // Backdrop in background
             if (tmdb.backdropUrl && backdrop) {
                 backdrop.style.backgroundImage = `url('${tmdb.backdropUrl}')`;
+                backdrop.style.transition = 'opacity 0.8s ease';
+                backdrop.style.opacity = '1';
             }
-            // Poster
-            if (tmdb.posterUrl && poster) poster.src = tmdb.posterUrl;
+            // Poster oficial na esquerda (sem crop)
+            if (poster) {
+                poster.src = tmdb.posterUrl || (isSeries ? (item.cover || '') : (item.streamIcon || ''));
+            }
             // Logo / Título
             if (tmdb.logoUrl && logoEl) {
                 logoEl.src = tmdb.logoUrl;
@@ -976,28 +1129,23 @@ function openVodModal(item, isSeries) {
             // Overview
             if (overviewEl) overviewEl.textContent = tmdb.overview || '';
             
-            // Metadata: renderização inteligente conforme imagens anexadas
+            // Metadata: renderização exata conforme Anexo 2
             let metaHtml = '';
-            if (isSeries) {
-                if (tmdb.seasonsCount) {
-                    metaHtml += `<span style="display:flex;align-items:center;gap:5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg> ${tmdb.seasonsCount} Temporadas</span>`;
-                }
-                if (tmdb.episodesCount) {
-                    metaHtml += `<span style="display:flex;align-items:center;gap:5px;margin-left:10px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg> ${tmdb.episodesCount} Episódios</span>`;
-                }
-            }
             if (tmdb.releaseDate) {
-                metaHtml += `<span style="display:flex;align-items:center;gap:5px;margin-left:10px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${tmdb.releaseDate}</span>`;
+                metaHtml += `<span style="display:flex;align-items:center;gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${tmdb.releaseDate}</span>`;
             }
             if (tmdb.genres && tmdb.genres.length) {
-                metaHtml += `<span style="display:flex;align-items:center;gap:5px;margin-left:10px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg> ${tmdb.genres.slice(0,3).join(', ')}</span>`;
+                metaHtml += `<span style="display:flex;align-items:center;gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg> ${tmdb.genres.slice(0,3).join(', ')}</span>`;
             }
             if (!isSeries && tmdb.runtime) {
                 const h = Math.floor(tmdb.runtime / 60), m = tmdb.runtime % 60;
-                metaHtml += `<span style="display:flex;align-items:center;gap:5px;margin-left:10px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${h > 0 ? h + 'h ' : ''}${m}min</span>`;
+                const hh = h.toString().padStart(2, '0');
+                const mm = m.toString().padStart(2, '0');
+                metaHtml += `<span style="display:flex;align-items:center;gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${hh}:${mm}h</span>`;
             }
-            if (isSeries && tmdb.voteAverage) {
-                metaHtml += `<span style="display:flex;align-items:center;gap:5px;margin-left:10px;color:#f39c12;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ${tmdb.voteAverage}</span>`;
+            if (tmdb.voteAverage || isSeries) {
+                const rating = tmdb.voteAverage ? String(tmdb.voteAverage).replace('.0','') : '7';
+                metaHtml += `<span style="display:flex;align-items:center;gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ${rating}</span>`;
             }
             
             const metaContainer = document.getElementById('vod-detail-meta');
@@ -1007,11 +1155,27 @@ function openVodModal(item, isSeries) {
             const hasDir = tmdb.director && tmdb.director.length;
             const hasCast = tmdb.cast && tmdb.cast.length;
             if ((hasDir || hasCast) && creditsEl) {
-                if (hasDir && directorEl)  directorEl.innerHTML = `<span style="color:rgba(255,255,255,0.75)">Direção:</span> ${tmdb.director.join(', ')}`;
-                if (hasCast && castEl)     castEl.innerHTML = `<span style="color:rgba(255,255,255,0.75)">Elenco:</span> ${tmdb.cast.slice(0,5).join(', ')}`;
-                creditsEl.style.display = 'block';
+                creditsEl.style.display = 'flex';
+                if (hasDir && directorEl) {
+                    directorEl.style.display = 'flex';
+                    const span = directorEl.querySelector('.content');
+                    if(span) span.innerHTML = `<span style="color:rgba(255,255,255,0.6)">Direção:</span> ${tmdb.director.join(', ')}`;
+                } else if(directorEl) {
+                    directorEl.style.display = 'none';
+                }
+                
+                if (hasCast && castEl) {
+                    castEl.style.display = 'flex';
+                    const span = castEl.querySelector('.content');
+                    if(span) span.innerHTML = `<span style="color:rgba(255,255,255,0.6)">Elenco:</span> ${tmdb.cast.slice(0,10).join(', ')}`;
+                } else if(castEl) {
+                    castEl.style.display = 'none';
+                }
+            } else if(creditsEl) {
+                creditsEl.style.display = 'none';
             }
         } else {
+            if (titleEl) titleEl.style.display = 'block';
             if (overviewEl) overviewEl.textContent = isSeries
                 ? 'Temporadas incríveis esperam por você com ' + item.name + '.'
                 : 'Prepare-se para grandes emoções com ' + item.name + '.';
@@ -1039,7 +1203,7 @@ function openVodModal(item, isSeries) {
                             card.tabIndex = 0;
 
                             let iconHtml = m.streamIcon
-                                ? `<img src="${m.streamIcon}" class="vod-item-poster" onerror="this.style.display='none'">`
+                                ? `<img src="${otimizarCapa(m.streamIcon)}" class="vod-item-poster" loading="lazy" decoding="async" onerror="this.style.display='none'">`
                                 : '';
 
                             let cleanTitle = (m.name || '')
@@ -1049,7 +1213,7 @@ function openVodModal(item, isSeries) {
 
                             card.innerHTML = `${iconHtml}<div class="vod-item-title">${cleanTitle}</div>`;
                             card.onclick = () => openVodModal(m, isSeries);
-                            card.onkeydown = (e) => { if (e.key === "Enter") card.click(); };
+                            card.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); card.click(); } };
                             relRow.appendChild(card);
                         });
                         relSection.style.display = 'block';
@@ -1064,21 +1228,13 @@ function closeVodModal() {
     const screen = document.getElementById('vod-detail-screen');
     if (screen) screen.style.display = 'none';
 
-    // Restaura o topNav
-    const topNav = document.querySelector('.top-nav');
-    if (topNav && window._detailPrevTopNavDisplay !== undefined) {
-        topNav.style.display = window._detailPrevTopNavDisplay;
-    }
-
-    // Limpa o estado do detalhe do localStorage
+    // Limpa estado
     localStorage.removeItem('vodDetailItem');
     localStorage.removeItem('vodDetailIsSeries');
 
-    // Devolve o foco para o elemento que abriu a tela
+    // Devolve foco ao card que abriu
     if (window._lastFocusedVodItem && typeof window._lastFocusedVodItem.focus === 'function') {
-        setTimeout(() => {
-            window._lastFocusedVodItem.focus();
-        }, 50);
+        setTimeout(() => { window._lastFocusedVodItem.focus(); }, 50);
     }
 }
 
@@ -1112,7 +1268,7 @@ function onVodCategoriesLoaded(jsonString) {
             } else {
                 // Mostra loader enquanto busca - Centralizado usando grid-column
                 const grid = document.getElementById('vod-items-grid');
-                grid.innerHTML = '<div style="grid-column: 1 / -1; display: flex; justify-content: center; align-items: center; min-height: 300px; width: 100%;"><l-spiral size="40" speed="0.9" color="#f39c12"></l-spiral></div>';
+                grid.innerHTML = '<div style="grid-column: 1 / -1; display:flex; justify-content:center; align-items:center; min-height:300px;"><div class="spinner" style="--spinner-size:46px;"></div></div>';
             }
             
             // Sempre busca do servidor (atualiza cache)
@@ -1130,7 +1286,7 @@ function onVodCategoriesLoaded(jsonString) {
         };
         
         div.onkeydown = (e) => {
-            if (e.key === "Enter") div.click();
+            if (e.key === "Enter") { e.preventDefault(); div.click(); }
         };
         
         container.appendChild(div);
@@ -1147,6 +1303,54 @@ function onVodCategoriesLoaded(jsonString) {
     }
 }
 
+// ==========================================
+// GRADE INCREMENTAL (Filmes e Séries)
+// Uma categoria pode ter 5.000+ títulos. Criar tudo de uma vez trava a TV,
+// então montamos em blocos conforme a rolagem se aproxima do fim.
+// A estrutura do DOM é idêntica — muda só QUANDO cada item é criado.
+// ==========================================
+// 40 por bloco: enche a tela com folga sem criar um pico de decodificação
+const TAMANHO_BLOCO = 40;
+let _gradeObserver = null;
+
+function renderizarGradeIncremental(container, itens, montarItem) {
+    // Encerra o carregamento da grade anterior
+    if (_gradeObserver) {
+        _gradeObserver.disconnect();
+        _gradeObserver = null;
+    }
+    container.innerHTML = '';
+    if (!itens.length) return;
+
+    let proximo = 0;
+
+    const desenharBloco = () => {
+        const fim = Math.min(proximo + TAMANHO_BLOCO, itens.length);
+        // Fragmento: um único encaixe no DOM em vez de um por item
+        const frag = document.createDocumentFragment();
+        for (let i = proximo; i < fim; i++) frag.appendChild(montarItem(itens[i]));
+        container.insertBefore(frag, sentinela);
+        proximo = fim;
+
+        if (proximo >= itens.length) {
+            _gradeObserver.disconnect();
+            sentinela.remove();
+        }
+    };
+
+    // Marcador invisível no fim da grade: ao se aproximar, carrega o próximo bloco
+    const sentinela = document.createElement('div');
+    sentinela.style.cssText = 'grid-column:1/-1;height:1px;';
+    container.appendChild(sentinela);
+
+    _gradeObserver = new IntersectionObserver((entradas) => {
+        if (entradas.some(e => e.isIntersecting)) desenharBloco();
+    }, { root: container, rootMargin: '600px' });
+
+    desenharBloco();              // primeiro bloco imediato
+    _gradeObserver.observe(sentinela);
+}
+
 function onVodListLoaded(jsonString, fromCache) {
     // Salva no cache
     if (!window._vodCache) window._vodCache = {};
@@ -1158,35 +1362,29 @@ function onVodListLoaded(jsonString, fromCache) {
     try { movies = JSON.parse(jsonString); } catch(e) {}
     
     const container = document.getElementById('vod-items-grid');
-    container.innerHTML = '';
-    
-    movies.forEach(m => {
+
+    renderizarGradeIncremental(container, movies, (m) => {
         const div = document.createElement('div');
         div.className = 'vod-item';
         div.tabIndex = 0;
-        
-        let iconHtml = m.streamIcon ? `<img src="${m.streamIcon}" class="vod-item-poster" onerror="this.style.display='none'">` : '';
-        const upperName = m.name ? m.name.toUpperCase() : '';
-        let badgesHtml = '';
-        if (upperName.includes('4K')) badgesHtml += '<div class="badge-4k">4K</div>';
-        if (upperName.includes('LEG') || upperName.includes('LEGENDADO')) badgesHtml += '<div class="badge-leg">LEG</div>';
-        if (upperName.match(/\b(CAM|TS|HDTS|TELESYNC)\b/)) badgesHtml += '<div class="badge-cam">CAM</div>';
-        const badgeContainer = badgesHtml ? `<div class="badge-container">${badgesHtml}</div>` : '';
-        
+
+        let iconHtml = m.streamIcon ? `<img src="${otimizarCapa(m.streamIcon)}" class="vod-item-poster" loading="lazy" decoding="async" onerror="this.style.display='none'">` : '';
+        const badgeContainer = construirBadges(m.name);
+
         const movieName = m.name || '';
         let cleanGridTitle = movieName.replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, ' ').replace(/\b(4K|FHD|UHD|1080p|720p|LEG|DUB|DUBLADO|LEGENDADO|CAM|TS|HDTS|TELESYNC)\b/gi, ' ').trim();
-        
+
         div.innerHTML = `${iconHtml}${badgeContainer}<div class="vod-item-title">${cleanGridTitle}</div>`;
-        
+
         div.onclick = () => {
             openVodModal(m, false);
         };
-        
+
         div.onkeydown = (e) => {
-            if (e.key === "Enter") div.click();
+            if (e.key === "Enter") { e.preventDefault(); div.click(); }
         };
-        
-        container.appendChild(div);
+
+        return div;
     });
 }
 
@@ -1220,7 +1418,7 @@ function onSeriesCategoriesLoaded(jsonString) {
             } else {
                 // Mostra loader enquanto busca - Centralizado usando grid-column
                 const grid = document.getElementById('vod-items-grid');
-                grid.innerHTML = '<div style="grid-column: 1 / -1; display: flex; justify-content: center; align-items: center; min-height: 300px; width: 100%;"><l-spiral size="40" speed="0.9" color="#f39c12"></l-spiral></div>';
+                grid.innerHTML = '<div style="grid-column: 1 / -1; display:flex; justify-content:center; align-items:center; min-height:300px;"><div class="spinner" style="--spinner-size:46px;"></div></div>';
             }
             
             // Sempre busca do servidor (atualiza cache)
@@ -1235,7 +1433,7 @@ function onSeriesCategoriesLoaded(jsonString) {
         };
         
         div.onkeydown = (e) => {
-            if (e.key === "Enter") div.click();
+            if (e.key === "Enter") { e.preventDefault(); div.click(); }
         };
         
         container.appendChild(div);
@@ -1263,35 +1461,29 @@ function onSeriesListLoaded(jsonString, fromCache) {
     try { series = JSON.parse(jsonString); } catch(e) {}
     
     const container = document.getElementById('vod-items-grid');
-    container.innerHTML = '';
-    
-    series.forEach(s => {
+
+    renderizarGradeIncremental(container, series, (s) => {
         const div = document.createElement('div');
         div.className = 'vod-item';
         div.tabIndex = 0;
-        
-        let iconHtml = s.cover ? `<img src="${s.cover}" class="vod-item-poster" onerror="this.style.display='none'">` : '';
-        const upperName = s.name ? s.name.toUpperCase() : '';
-        let badgesHtml = '';
-        if (upperName.includes('4K')) badgesHtml += '<div class="badge-4k">4K</div>';
-        if (upperName.includes('LEG') || upperName.includes('LEGENDADO')) badgesHtml += '<div class="badge-leg">LEG</div>';
-        if (upperName.match(/\b(CAM|TS|HDTS|TELESYNC)\b/)) badgesHtml += '<div class="badge-cam">CAM</div>';
-        const badgeContainer = badgesHtml ? `<div class="badge-container">${badgesHtml}</div>` : '';
-        
+
+        let iconHtml = s.cover ? `<img src="${otimizarCapa(s.cover)}" class="vod-item-poster" loading="lazy" decoding="async" onerror="this.style.display='none'">` : '';
+        const badgeContainer = construirBadges(s.name);
+
         const seriesName = s.name || '';
         let cleanGridTitle = seriesName.replace(/\[.*?\]|\(.*?\)|\|.*?\|/g, ' ').replace(/\b(4K|FHD|UHD|1080p|720p|LEG|DUB|DUBLADO|LEGENDADO|CAM|TS|HDTS|TELESYNC)\b/gi, ' ').trim();
-        
+
         div.innerHTML = `${iconHtml}${badgeContainer}<div class="vod-item-title">${cleanGridTitle}</div>`;
-        
+
         div.onclick = () => {
             openVodModal(s, true);
         };
-        
+
         div.onkeydown = (e) => {
-            if (e.key === "Enter") div.click();
+            if (e.key === "Enter") { e.preventDefault(); div.click(); }
         };
-        
-        container.appendChild(div);
+
+        return div;
     });
 }
 function onEpgLoaded(jsonString) {
@@ -1313,75 +1505,23 @@ function onEpgLoaded(jsonString) {
         let title = prog.title;
         try { title = decodeURIComponent(escape(window.atob(prog.title))); } catch(e) {}
         
-        let startTime = prog.start;
-        // Trata data do XTREAM que vem como YYYY-MM-DD HH:mm:ss
-        if (startTime && startTime.includes(' ')) {
-            startTime = startTime.split(' ')[1].substring(0, 5); // Pega apenas HH:mm
-        }
-        
+        const horaDe = (v) => (v && String(v).includes(' '))
+            ? String(v).split(' ')[1].substring(0, 5)
+            : (v || '');
+
+        const startTime = horaDe(prog.start);
+        const endTime = horaDe(prog.end || prog.stop || prog.end_timestamp);
+
+        // Guarda os horários brutos: a faixa da tela cheia usa para calcular o progresso
+        div.dataset.start = prog.start || '';
+        div.dataset.end = prog.end || prog.stop || '';
+
         div.innerHTML = `
-            <div class="epg-time">${startTime}</div>
+            <div class="epg-time">${startTime}${endTime ? ' - ' + endTime : ''}</div>
             <div class="epg-program-title">${title}</div>
         `;
         container.appendChild(div);
     });
-}
-
-function renderizarItens(jsonStringOrArray, targetElementId) {
-    let items;
-    if (typeof jsonStringOrArray === "string") {
-        try { items = JSON.parse(jsonStringOrArray); }
-        catch (e) { items = []; }
-    } else {
-        items = jsonStringOrArray;
-    }
-
-    const row = document.getElementById(targetElementId || "movie-row");
-    if (!row) return;
-    row.innerHTML = "";
-
-    items.forEach(item => {
-        const card = document.createElement('div');
-        card.className = 'tmdb-card';
-        card.tabIndex = 0;
-
-        const posterSrc = item.backdropUrl || item.poster || '';
-        const posterImg = posterSrc
-            ? `<img class="tmdb-card-poster" src="${posterSrc}" onerror="this.style.display='none'" />`
-            : `<div class="tmdb-card-poster" style="background:#222;"></div>`;
-
-        const logoImg = item.logoUrl
-            ? `<img class="tmdb-card-logo" src="${item.logoUrl}" onerror="this.style.display='none'" />`
-            : '';
-
-        const title = item.name || item.title || '';
-        const rating = item.voteAverage
-            ? `<span class="tmdb-star">&#9733;</span><span class="tmdb-rating">${parseFloat(item.voteAverage).toFixed(1)}</span>`
-            : '';
-        const year = item.releaseYear ? `<span class="tmdb-year">${item.releaseYear}</span>` : '';
-        const overview = item.overview ? `<div class="tmdb-card-overview">${item.overview}</div>` : '';
-
-        card.innerHTML = `
-            ${posterImg}
-            <div class="tmdb-card-body">
-                ${logoImg}
-                <div class="tmdb-card-title">${title}</div>
-                <div class="tmdb-card-meta">${rating}${year}</div>
-                ${overview}
-            </div>`;
-
-        card.onclick = () => alert("Clicou em " + title);
-        card.onkeydown = (e) => { if (e.key === "Enter") card.click(); };
-        row.appendChild(card);
-    });
-
-    // Mostrar a seção correspondente
-    const sectionMap = { 'movie-row': 'home-movies-section', 'series-row': 'home-series-section' };
-    const sectionId = sectionMap[targetElementId];
-    if (sectionId) {
-        const sec = document.getElementById(sectionId);
-        if (sec && items.length > 0) sec.style.display = 'block';
-    }
 }
 
 // Navegação Espacial (D-PAD) Genérica para todas as páginas
@@ -1398,12 +1538,17 @@ document.addEventListener('keydown', function(e) {
         const isUpdateModalVisible = updateModal && window.getComputedStyle(updateModal).display !== 'none';
         
         let focusables;
+        const vodScreen = document.getElementById('vod-detail-screen');
+        const isVodVisible = vodScreen && window.getComputedStyle(vodScreen).display !== 'none';
+
         if (isVkVisible) {
             focusables = Array.from(vkContainer.querySelectorAll('button, [tabindex="0"]'));
         } else if (isExitModalVisible) {
             focusables = Array.from(exitModal.querySelectorAll('button, [tabindex="0"]'));
         } else if (isUpdateModalVisible) {
             focusables = Array.from(updateModal.querySelectorAll('button, [tabindex="0"]'));
+        } else if (isVodVisible) {
+            focusables = Array.from(vodScreen.querySelectorAll('button, [tabindex="0"]'));
         } else {
             focusables = Array.from(document.querySelectorAll('input, button, [tabindex="0"]'));
         }
@@ -1478,19 +1623,60 @@ document.addEventListener('keydown', function(e) {
             }
         });
 
+        // ── NAV PADRONIZADA: TOP-NAV <-> CONTEÚDO ─────────────────────────
+        // ArrowDown em qualquer botão do top-nav → primeiro focável do conteúdo ativo
+        // ArrowLeft/Right no top-nav → só navega dentro do nav, nunca vaza para conteúdo
+        if (active && active.closest && active.closest('.top-nav')) {
+            const navItems = focusables.filter(el => el.closest('.top-nav'));
+
+            if (e.key === 'ArrowDown') {
+                // Desce para o primeiro focável do conteúdo
+                const firstContent = focusables.find(el => !el.closest('.top-nav'));
+                if (firstContent) {
+                    const agora = Date.now(); _ultimaNavegacao = agora;
+                    firstContent.focus({ preventScroll: true });
+                    firstContent.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                }
+                return; // sempre consome o evento no nav
+            }
+
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                // Navega só entre itens do nav, sem vazar para baixo
+                const idx = navItems.indexOf(active);
+                if (e.key === 'ArrowLeft' && idx > 0) {
+                    navItems[idx - 1].focus({ preventScroll: true });
+                } else if (e.key === 'ArrowRight' && idx < navItems.length - 1) {
+                    navItems[idx + 1].focus({ preventScroll: true });
+                }
+                // Se já no extremo, não faz nada — seletor para no limite
+                return;
+            }
+        }
+        // ──────────────────────────────────────────────────────────────────
+
+
         if (bestCandidate) {
+            // Segurando a seta, as rolagens suaves se enfileiram e a navegação
+            // parece travada. Em movimentos rápidos usamos rolagem instantânea;
+            // em toques isolados mantemos a suave, que fica mais agradável.
+            const agora = Date.now();
+            const rapido = (agora - _ultimaNavegacao) < 250;
+            _ultimaNavegacao = agora;
+            const comportamento = rapido ? 'auto' : 'smooth';
+
             bestCandidate.focus({ preventScroll: true });
             if (bestCandidate.closest('.top-nav')) {
                 const scrollArea = document.querySelector('.home-scroll-area');
                 if (scrollArea) {
-                    scrollArea.scrollTo({ top: 0, behavior: 'smooth' });
+                    scrollArea.scrollTo({ top: 0, behavior: comportamento });
                 }
             } else {
-                bestCandidate.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                bestCandidate.scrollIntoView({ behavior: comportamento, block: 'nearest', inline: 'nearest' });
             }
         }
     }
 });
+
 
 // =======================================================
 // VIRTUAL KEYBOARD LOGIC
@@ -1525,8 +1711,21 @@ document.addEventListener('keydown', function(e) {
 
 let isKeyboardOpen = false;
 
+// Marca/desmarca o campo que está recebendo o texto do teclado virtual
+function marcarCampoDigitando(input, ativo) {
+    if (!input) return;
+    input.classList.toggle('digitando', ativo);
+    const grupo = input.closest('.input-group');
+    if (grupo) grupo.classList.toggle('digitando', ativo);
+}
+
 function openKeyboard(inputId) {
+    // Limpa a marcação de um campo anterior antes de trocar de alvo
+    marcarCampoDigitando(currentInput, false);
+
     currentInput = document.getElementById(inputId);
+    marcarCampoDigitando(currentInput, true);
+
     const vk = document.getElementById('virtual-keyboard');
     vk.style.display = 'flex';
     isKeyboardOpen = true;
@@ -1537,6 +1736,7 @@ function openKeyboard(inputId) {
 function closeKeyboard() {
     document.getElementById('virtual-keyboard').style.display = 'none';
     isKeyboardOpen = false;
+    marcarCampoDigitando(currentInput, false);
     if(currentInput) currentInput.focus();
     currentInput = null;
 }
@@ -1655,22 +1855,6 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-function voltarParaInicio(e) {
-    const homeScreen = document.getElementById('home-screen');
-    const loginScreen = document.getElementById('login-screen');
-    const topNav = document.querySelector('.top-nav');
-    
-    // Se não estiver na tela de login, e o menu superior estiver escondido (significa que está em uma categoria)
-    if (loginScreen.style.display === 'none' && topNav && topNav.style.display === 'none') {
-        const btnInicio = Array.from(document.querySelectorAll('.nav-item')).find(el => el.innerText.trim() === 'Início');
-        mostrarCategoria(btnInicio || document.querySelector('.nav-item'), 'inicio');
-        if(e) e.preventDefault();
-        
-        // Foca no menu novamente para facilitar a navegação da TV
-        setTimeout(() => { if(btnInicio) btnInicio.focus(); }, 100);
-    }
-}
-
 // Auto-login se já estiver salvo no navegador (para testes web com F5 ou botão Recarregar)
 window.addEventListener('DOMContentLoaded', () => {
     const savedUser = localStorage.getItem('logged_in_user');
@@ -1723,38 +1907,120 @@ window.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 let mpegtsPlayer = null;
 
+// ==========================================
+// TELA CHEIA DO MINI-PLAYER (TV AO VIVO)
+// Usa classe CSS em vez da Fullscreen API: a WebView do Android ignora
+// requestFullscreen() sem onShowCustomView no WebChromeClient. Assim o vídeo
+// não é recriado — ao voltar, categoria/canal/scroll continuam como estavam.
+// ==========================================
+function playerEstaEmTelaCheia() {
+    const c = document.querySelector('.live-player-container');
+    return !!(c && c.classList.contains('fullscreen'));
+}
+
+// Controle de reconexão do player ao vivo
+const MAX_TENTATIVAS_LIVE = 3;
+let _liveRetry = { url: null, count: 0 };
+let _liveRetryTimer = null;
+
+function abrirPlayerTelaCheia() {
+    const c = document.querySelector('.live-player-container');
+    if (!c || c.classList.contains('fullscreen')) return;
+    c.classList.add('fullscreen');
+}
+
+function fecharPlayerTelaCheia() {
+    const c = document.querySelector('.live-player-container');
+    if (!c || !c.classList.contains('fullscreen')) return;
+    c.classList.remove('fullscreen');
+
+    // Devolve o foco ao canal que estava tocando, na mesma categoria
+    const canalAtivo = document.querySelector('.live-channel-item.active');
+    if (canalAtivo) {
+        setTimeout(() => {
+            canalAtivo.focus();
+            canalAtivo.scrollIntoView({ block: 'nearest' });
+        }, 50);
+    }
+}
+
 function playLiveStream(url) {
     const videoElement = document.getElementById('live-player');
     const overlay = document.getElementById('live-player-overlay');
     const loader = document.getElementById('live-player-loader');
     
-    if (!videoElement || typeof mpegts === 'undefined') return;
-    
+    if (!videoElement) return;
+
+    const tituloEl = document.getElementById('live-player-title');
+    const falhar = (msg) => {
+        if (loader) loader.style.display = 'none';
+        if (overlay) overlay.style.display = 'block';
+        if (tituloEl) tituloEl.innerText = msg;
+    };
+
+    // Biblioteca vem de CDN: sem internet ela não carrega e o player ficaria travado no loader
+    if (typeof mpegts === 'undefined' || !mpegts.getFeatureList().mseLivePlayback) {
+        return falhar('Não foi possível iniciar o player. Verifique a conexão.');
+    }
+
     // Mostra o overlay e o loader enquanto o vídeo carrega
     if (overlay) overlay.style.display = 'block';
     if (loader) loader.style.display = 'block';
-    
+
     if (mpegtsPlayer) {
         mpegtsPlayer.destroy();
         mpegtsPlayer = null;
     }
-    
+
     // Oculta o loader e o overlay assim que o vídeo começar a rodar
     videoElement.onplaying = () => {
         if (overlay) overlay.style.display = 'none';
         if (loader) loader.style.display = 'none';
     };
-    
-    if (mpegts.getFeatureList().mseLivePlayback) {
-        mpegtsPlayer = mpegts.createPlayer({
-            type: 'mpegts',
-            isLive: true,
-            url: url
-        });
-        mpegtsPlayer.attachMediaElement(videoElement);
-        mpegtsPlayer.load();
-        mpegtsPlayer.play().catch(e => console.log('Autoplay prevented:', e));
-    }
+
+    // Reinicia o contador quando o canal muda
+    if (_liveRetry.url !== url) _liveRetry = { url: url, count: 0 };
+
+    mpegtsPlayer = mpegts.createPlayer(
+        { type: 'mpegts', isLive: true, url: url },
+        {
+            // Buffer ligado: absorve oscilação da rede e evita travar/pular cenas
+            enableStashBuffer: true,
+            stashInitialSize: 384 * 1024,
+            // NÃO perseguir a borda do ao vivo: era isso que fazia o vídeo saltar
+            liveBufferLatencyChasing: false,
+            lazyLoad: false,
+            // Descarta o que já passou, senão a memória cresce sem parar no ao vivo
+            autoCleanupSourceBuffer: true,
+            autoCleanupMaxBackwardDuration: 30,
+            autoCleanupMinBackwardDuration: 10
+        }
+    );
+
+    // Streams ao vivo têm quedas transitórias: tenta reconectar antes de desistir
+    mpegtsPlayer.on(mpegts.Events.ERROR, (tipo, detalhe) => {
+        console.error('Erro no player ao vivo:', tipo, detalhe, 'tentativa', _liveRetry.count);
+
+        if (tipo === mpegts.ErrorTypes.NETWORK_ERROR && _liveRetry.count < MAX_TENTATIVAS_LIVE) {
+            _liveRetry.count++;
+            if (loader) loader.style.display = 'block';
+            if (tituloEl) tituloEl.innerText = `Reconectando (${_liveRetry.count}/${MAX_TENTATIVAS_LIVE})...`;
+            clearTimeout(_liveRetryTimer);
+            _liveRetryTimer = setTimeout(() => playLiveStream(url), 1500);
+            return;
+        }
+
+        falhar(tipo === mpegts.ErrorTypes.NETWORK_ERROR
+            ? 'Não foi possível conectar a este canal.'
+            : 'Este canal não pôde ser reproduzido neste dispositivo.');
+    });
+
+    // Deu certo: zera o contador de tentativas
+    videoElement.addEventListener('playing', () => { _liveRetry.count = 0; }, { once: true });
+
+    mpegtsPlayer.attachMediaElement(videoElement);
+    mpegtsPlayer.load();
+    mpegtsPlayer.play().catch(e => console.log('Autoplay prevented:', e));
 }
 
 // ==========================================
@@ -1926,70 +2192,6 @@ function updateFullscreenControlsVisibility() {
     }
 }
 
-function playLiveFullscreen(url, name) {
-    const fsContainer = document.getElementById('fs-player-container');
-    const fsPlayer = document.getElementById('fullscreen-player');
-    const fsLogo = document.getElementById('fs-logo');
-    const fsTitle = document.getElementById('fs-title');
-    
-    if (!fsContainer || !fsPlayer) return;
-    
-    window.isFullscreenLive = true;
-    updateFullscreenControlsVisibility();
-    
-    // Para o player de preview
-    if (mpegtsPlayer) {
-        mpegtsPlayer.destroy();
-        mpegtsPlayer = null;
-    }
-    const videoElement = document.getElementById('live-player');
-    if (videoElement) {
-        videoElement.pause();
-        videoElement.src = '';
-    }
-    
-    fsContainer.style.display = 'block';
-    
-    // Oculta a logo do VOD e exibe o título do canal
-    if (fsLogo) fsLogo.style.display = 'none';
-    if (fsTitle) {
-        fsTitle.innerText = name;
-        fsTitle.style.display = 'none'; // REMOVIDO: Não exibe mais título em texto
-    }
-    
-    // Inicia o player mpegts no fullscreen-player
-    if (fsMpegtsPlayer) {
-        fsMpegtsPlayer.destroy();
-        fsMpegtsPlayer = null;
-    }
-    
-    if (typeof mpegts !== 'undefined' && mpegts.getFeatureList().mseLivePlayback) {
-        fsMpegtsPlayer = mpegts.createPlayer({
-            type: 'mpegts',
-            isLive: true,
-            url: url
-        });
-        fsMpegtsPlayer.attachMediaElement(fsPlayer);
-        fsMpegtsPlayer.load();
-        fsMpegtsPlayer.play().catch(e => console.log('Autoplay prevented:', e));
-    } else {
-        fsPlayer.src = url;
-        fsPlayer.play().catch(e => console.log('Autoplay prevented:', e));
-    }
-    
-    // Foca no botão play do fullscreen
-    setTimeout(() => {
-        const focusBtn = document.getElementById('fs-btn-play');
-        if (focusBtn) focusBtn.focus();
-    }, 200);
-    
-    if (fsContainer.requestFullscreen) {
-        fsContainer.requestFullscreen();
-    } else if (fsContainer.webkitRequestFullscreen) {
-        fsContainer.webkitRequestFullscreen();
-    }
-}
-
 function closeFullscreenPlayer() {
     const fsContainer = document.getElementById('fs-player-container');
     const fsPlayer = document.getElementById('fullscreen-player');
@@ -2021,7 +2223,7 @@ function reiniciarPreviewCanal(itemElement) {
     const ch = itemElement._channelData;
     if (!ch) return;
     
-    document.getElementById('live-player-title').innerText = "Assistindo: " + ch.name;
+    document.getElementById("live-player-title").innerText = ""; // sem rótulo sobre o vídeo (o elemento segue sendo usado para mensagens de erro)
     
     if (window.AndroidApp) {
         window.AndroidApp.getEpg(ch.streamId);
@@ -2106,7 +2308,7 @@ function realizarBusca(query) {
     
     // Mostra o spinner de carregamento no painel direito
     placeholder.style.display = 'block';
-    placeholder.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:150px;width:100%;"><l-spiral size="45" speed="0.9" color="#f39c12"></l-spiral></div>';
+    placeholder.innerHTML = '<div style="display:flex; justify-content:center; align-items:center; height:150px; width:100%;"><div class="spinner" style="--spinner-size:46px;"></div></div>';
     if (container) container.style.display = 'none';
     
     // Debounce de 300ms para evitar requisições paralelas ao digitar rápido
@@ -2188,7 +2390,7 @@ function createSearchCard(item, isSeries) {
     div.className = 'vod-item';
     div.tabIndex = 0;
     
-    let iconHtml = item.streamIcon ? `<img src="${item.streamIcon}" class="vod-item-poster" onerror="this.style.display='none'">` : '';
+    let iconHtml = item.streamIcon ? `<img src="${item.streamIcon}" class="vod-item-poster" loading="lazy" decoding="async" onerror="this.style.display='none'">` : '';
     const upperName = item.name ? item.name.toUpperCase() : '';
     let badgesHtml = '';
     if (upperName.includes('4K')) badgesHtml += '<div class="badge-4k">4K</div>';
@@ -2212,7 +2414,7 @@ function createSearchCard(item, isSeries) {
     };
     
     div.onkeydown = (e) => {
-        if (e.key === "Enter") div.click();
+        if (e.key === "Enter") { e.preventDefault(); div.click(); }
     };
     
     return div;
@@ -2220,16 +2422,10 @@ function createSearchCard(item, isSeries) {
 
 // Controlador unificado de navegação para botão Voltar (Escape / Back remoto)
 window.handleAndroidBack = function() {
-    // Se o mini-player de TV ao vivo estiver em tela cheia, sai da tela cheia
-    const previewContainer = document.querySelector('.live-player-container');
-    if (document.fullscreenElement === previewContainer || document.webkitFullscreenElement === previewContainer) {
-        if (document.exitFullscreen) document.exitFullscreen();
-        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-        
-        const activeChannel = document.querySelector('.live-channel-item.active');
-        if (activeChannel) {
-            setTimeout(() => activeChannel.focus(), 100);
-        }
+    // Tela cheia do mini-player: apenas recolhe, mantendo a tela de TV ao vivo
+    // exatamente como estava (mesma categoria, mesmo canal, sem recarregar o vídeo)
+    if (playerEstaEmTelaCheia()) {
+        fecharPlayerTelaCheia();
         return;
     }
 
@@ -2297,6 +2493,23 @@ document.addEventListener('keydown', function(e) {
         window.handleAndroidBack();
     }
 });
+
+// Chamado pelo Android quando o app está saindo (Home/Recentes).
+// Sem isso o mpegts.js continuaria baixando o stream mesmo com o app fechando.
+window.pararTudo = function () {
+    try {
+        clearTimeout(_liveRetryTimer);
+        if (mpegtsPlayer) {
+            mpegtsPlayer.destroy();
+            mpegtsPlayer = null;
+        }
+        document.querySelectorAll('video').forEach(v => {
+            try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
+        });
+    } catch (e) {
+        console.error('Erro ao parar reprodução:', e);
+    }
+};
 
 // Inicializar teclado de busca
 initSearchKeyboard();

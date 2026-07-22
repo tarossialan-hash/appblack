@@ -21,7 +21,9 @@ data class TmdbImagesResponse(
 )
 
 data class TmdbImage(
-    @SerializedName("file_path") val filePath: String
+    @SerializedName("file_path") val filePath: String,
+    @SerializedName("iso_639_1") val language: String? = null,
+    @SerializedName("vote_average") val voteAverage: Double = 0.0
 )
 
 data class TmdbSearchResult(
@@ -49,7 +51,10 @@ data class TmdbBannerItem(
     val genreIds: List<Int>,
     val mediaType: String,
     val runtime: String? = null,
-    val ageRating: String? = null
+    val ageRating: String? = null,
+    val releaseDate: String = "",
+    val country: String = "",
+    val genreNames: String = ""
 )
 
 // Data classes for Age Ratings
@@ -86,8 +91,14 @@ data class TmdbMovieDetails(
     @SerializedName("vote_average") val voteAverage: Double,
     @SerializedName("runtime") val runtime: Int?,
     @SerializedName("genres") val genres: List<TmdbGenre>?,
+    @SerializedName("production_countries") val productionCountries: List<TmdbProductionCountry>?,
     @SerializedName("credits") val credits: TmdbCredits?,
     var logoPath: String? = null
+)
+
+data class TmdbProductionCountry(
+    @SerializedName("iso_3166_1") val code: String,
+    @SerializedName("name") val name: String?
 )
 
 data class TmdbTvDetails(
@@ -101,6 +112,7 @@ data class TmdbTvDetails(
     @SerializedName("vote_average") val voteAverage: Double,
     @SerializedName("episode_run_time") val episodeRunTime: List<Int>?,
     @SerializedName("genres") val genres: List<TmdbGenre>?,
+    @SerializedName("origin_country") val originCountry: List<String>?,
     @SerializedName("credits") val credits: TmdbCredits?,
     @SerializedName("seasons") val seasons: List<TmdbSeason>?,
     @SerializedName("created_by") val createdBy: List<TmdbCreator>?,

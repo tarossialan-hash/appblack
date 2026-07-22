@@ -14,10 +14,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import com.black.pro.data.local.AppDatabase
 import com.black.pro.data.remote.NetworkModule
-import android.content.Intent
-import android.os.Build
-import androidx.core.content.FileProvider
-import java.io.File
+import com.black.pro.util.FavoritoItem
+import com.black.pro.util.FavoritosManager
 import com.google.gson.Gson
 
 class WebAppInterface(
@@ -65,6 +63,45 @@ class WebAppInterface(
     }
 
     @JavascriptInterface
+    fun sync() {
+        val user = sessionManager.getUsername() ?: return
+        val pass = sessionManager.getPassword() ?: return
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                viewModel.syncWithServer(
+                    username = user, 
+                    password = pass, 
+                    isSilent = false,
+                    onProgress = { progress, status ->
+                        val percent = (progress * 100).toInt()
+                        val escapedStatus = escapeJs(status)
+                        webView.evaluateJavascript("javascript:updateSyncProgress($percent, '$escapedStatus')", null)
+                    },
+                    onError = { errorMsg ->
+                        val escapedError = escapeJs(errorMsg)
+                        webView.evaluateJavascript("javascript:onLoginError('$escapedError')", null)
+                    }
+                ) {
+                    val escapedUser = escapeJs(user)
+                    webView.evaluateJavascript("javascript:onLoginSuccess('$escapedUser')", null)
+                }
+            } catch (e: Exception) {
+                webView.evaluateJavascript("javascript:onLoginError('Erro ao sincronizar')", null)
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun getUsername(): String {
+        return sessionManager.getUsername() ?: ""
+    }
+
+    @JavascriptInterface
+    fun getPassword(): String {
+        return sessionManager.getPassword() ?: ""
+    }
+
+    @JavascriptInterface
     fun getBannerItems() {
         CoroutineScope(Dispatchers.Main).launch {
             val jsonArray = JSONArray()
@@ -79,51 +116,16 @@ class WebAppInterface(
                 obj.put("releaseYear", item.releaseYear)
                 obj.put("voteAverage", item.voteAverage)
                 obj.put("ageRating", item.ageRating ?: "")
+                // Campos da linha de metadados do banner (tipo, data, duração, país, gênero)
+                obj.put("mediaType", item.mediaType)
+                obj.put("typeLabel", if (item.mediaType == "tv") "Série" else "Filme")
+                obj.put("releaseDate", item.releaseDate)
+                obj.put("runtime", item.runtime ?: "")
+                obj.put("country", item.country)
+                obj.put("genres", item.genreNames)
                 jsonArray.put(obj)
             }
             webView.evaluateJavascript("javascript:onBannerItemsLoaded('${escapeJs(jsonArray.toString())}')", null)
-        }
-    }
-
-    @JavascriptInterface
-    fun loadCategory(categoryType: String) {
-        sessionManager.getUsername() ?: return
-        sessionManager.getPassword() ?: return
-
-        CoroutineScope(Dispatchers.Main).launch {
-            when (categoryType) {
-                "filmes" -> {
-                    // Converter a lista de filmes do ViewModel para JSON
-                    val jsonArray = JSONArray()
-                    viewModel.movies.forEach { movie ->
-                        val obj = JSONObject()
-                        obj.put("id", movie.streamId)
-                        obj.put("name", movie.name)
-                        jsonArray.put(obj)
-                    }
-                    webView.evaluateJavascript("javascript:renderizarItens('${escapeJs(jsonArray.toString())}')", null)
-                }
-                "series" -> {
-                    val jsonArray = JSONArray()
-                    viewModel.series.forEach { s ->
-                        val obj = JSONObject()
-                        obj.put("id", s.seriesId)
-                        obj.put("name", s.name)
-                        jsonArray.put(obj)
-                    }
-                    webView.evaluateJavascript("javascript:renderizarItens('${escapeJs(jsonArray.toString())}')", null)
-                }
-                "tv" -> {
-                    val jsonArray = JSONArray()
-                    viewModel.liveStreams.forEach { ch ->
-                        val obj = JSONObject()
-                        obj.put("id", ch.streamId)
-                        obj.put("name", ch.name)
-                        jsonArray.put(obj)
-                    }
-                    webView.evaluateJavascript("javascript:renderizarItens('${escapeJs(jsonArray.toString())}')", null)
-                }
-            }
         }
     }
 
@@ -242,7 +244,12 @@ class WebAppInterface(
                 val dao = AppDatabase.getDatabase(activity.applicationContext).iptvDao()
                 val movies = dao.getMoviesByCategory(categoryId).first()
                 val jsonArray = JSONArray()
-                val sortedList = movies.sortedBy { it.name.trim().lowercase() }
+                // Recém-adicionados primeiro. Quem não tem data (added = 0) cai
+                // para o fim, ordenado por nome, em vez de bagunçar o topo.
+                val sortedList = movies.sortedWith(
+                    compareByDescending<com.black.pro.data.local.entity.MovieEntity> { it.added }
+                        .thenBy { it.name.trim().lowercase() }
+                )
                 sortedList.forEach { m ->
                     val obj = JSONObject()
                     obj.put("streamId", m.streamId)
@@ -340,7 +347,11 @@ class WebAppInterface(
                 val dao = AppDatabase.getDatabase(activity.applicationContext).iptvDao()
                 val series = dao.getSeriesByCategory(categoryId).first()
                 val jsonArray = JSONArray()
-                val sortedList = series.sortedBy { it.name.trim().lowercase() }
+                // Mesma regra dos filmes: mais recentes no topo
+                val sortedList = series.sortedWith(
+                    compareByDescending<com.black.pro.data.local.entity.SeriesEntity> { it.added }
+                        .thenBy { it.name.trim().lowercase() }
+                )
                 sortedList.forEach { s ->
                     val obj = JSONObject()
                     obj.put("seriesId", s.seriesId)
@@ -387,8 +398,8 @@ class WebAppInterface(
 
     @JavascriptInterface
     fun searchContent(query: String) {
-        CoroutineScope(Dispatchers.Default).launch {
-            val cleanQuery = query.trim().lowercase()
+        CoroutineScope(Dispatchers.IO).launch {
+            val cleanQuery = query.trim()
             if (cleanQuery.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     webView.evaluateJavascript("javascript:onSearchResultsLoaded('[]')", null)
@@ -396,34 +407,33 @@ class WebAppInterface(
                 return@launch
             }
 
-            val matchedMovies = viewModel.movies.filter { 
-                it.name.lowercase().contains(cleanQuery)
-            }.take(50)
-
-            val matchedSeries = viewModel.series.filter { 
-                it.name.lowercase().contains(cleanQuery)
-            }.take(50)
-
             val jsonArray = JSONArray()
-            
-            matchedMovies.forEach { m ->
-                val obj = JSONObject()
-                obj.put("id", m.streamId)
-                obj.put("name", m.name)
-                obj.put("streamIcon", m.streamIcon)
-                obj.put("rating", m.rating)
-                obj.put("type", "movie")
-                jsonArray.put(obj)
-            }
+            try {
+                // Busca direto no banco: o catálogo completo não fica em memória.
+                val dao = AppDatabase.getDatabase(activity.applicationContext).iptvDao()
 
-            matchedSeries.forEach { s ->
-                val obj = JSONObject()
-                obj.put("id", s.seriesId)
-                obj.put("name", s.name)
-                obj.put("streamIcon", s.cover)
-                obj.put("rating", s.rating)
-                obj.put("type", "series")
-                jsonArray.put(obj)
+                dao.searchMovies(cleanQuery).forEach { m ->
+                    val obj = JSONObject()
+                    obj.put("id", m.streamId)
+                    obj.put("name", m.name)
+                    obj.put("streamIcon", m.streamIcon)
+                    obj.put("rating", m.rating)
+                    obj.put("containerExtension", m.containerExtension)
+                    obj.put("type", "movie")
+                    jsonArray.put(obj)
+                }
+
+                dao.searchSeries(cleanQuery).forEach { s ->
+                    val obj = JSONObject()
+                    obj.put("id", s.seriesId)
+                    obj.put("name", s.name)
+                    obj.put("streamIcon", s.cover)
+                    obj.put("rating", s.rating)
+                    obj.put("type", "series")
+                    jsonArray.put(obj)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
 
             withContext(Dispatchers.Main) {
@@ -449,5 +459,42 @@ class WebAppInterface(
             activity.finishAndRemoveTask()
             System.exit(0)
         }
+    }
+
+    /**
+     * Alterna o item nos favoritos. Espera {id, titulo, posterPath, tipo} em JSON.
+     * Retorna true se o item passou a ser favorito, false se foi removido (ou em erro),
+     * para o JS atualizar o estado do botão sem precisar de outra chamada.
+     */
+    @JavascriptInterface
+    fun addFavorite(json: String): Boolean {
+        return try {
+            val o = JSONObject(json)
+            val id = o.optInt("id")
+            if (id == 0) return false
+            val item = FavoritoItem(
+                id = id,
+                titulo = o.optString("titulo"),
+                posterPath = o.optString("posterPath").takeIf { it.isNotBlank() },
+                tipo = if (o.optString("tipo") == "series") "series" else "movie"
+            )
+            val ctx = activity.applicationContext
+            FavoritosManager.toggle(ctx, item)
+            FavoritosManager.isFavorito(ctx, item.id, item.tipo)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    @JavascriptInterface
+    fun isFavorite(id: Int, tipo: String): Boolean {
+        return FavoritosManager.isFavorito(activity.applicationContext, id, tipo)
+    }
+
+    @JavascriptInterface
+    fun logout() {
+        // Desconecta o acesso: limpa a sessão criptografada (usuário/senha) no dispositivo
+        sessionManager.logout()
     }
 }

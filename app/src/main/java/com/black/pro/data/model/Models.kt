@@ -46,7 +46,9 @@ data class Movie(
     @SerializedName("stream_icon") val streamIcon: String?,
     @SerializedName("rating") val rating: String?,
     @SerializedName("category_id") val categoryId: String?,
-    @SerializedName("container_extension") val containerExtension: String?
+    @SerializedName("container_extension") val containerExtension: String?,
+    // Timestamp Unix de quando o provedor adicionou o titulo
+    @SerializedName("added") val added: String? = null
 )
 
 data class Series(
@@ -55,7 +57,8 @@ data class Series(
     @SerializedName("series_id") val seriesId: Int,
     @SerializedName("cover") val cover: String?,
     @SerializedName("rating") val rating: String?,
-    @SerializedName("category_id") val categoryId: String?
+    @SerializedName("category_id") val categoryId: String?,
+    @SerializedName("last_modified") val lastModified: String? = null
 )
 
 data class EpgResponse(

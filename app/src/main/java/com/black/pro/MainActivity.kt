@@ -38,9 +38,18 @@ class MainActivity : ComponentActivity() {
 
         // Criar e configurar a WebView programaticamente
         webView = WebView(this)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+        // Inspeção remota (chrome://inspect) só em build de depuração.
+        // Ligada em release, qualquer um com acesso ao aparelho poderia ler o
+        // conteúdo da WebView — inclusive a sessão do usuário.
+        if (BuildConfig.DEBUG) {
             WebView.setWebContentsDebuggingEnabled(true)
         }
+        // Remove as barras de rolagem nativas da WebView (UI de TV não usa scrollbar)
+        webView.isVerticalScrollBarEnabled = false
+        webView.isHorizontalScrollBarEnabled = false
+        webView.scrollBarStyle = android.view.View.SCROLLBARS_INSIDE_OVERLAY
+        webView.overScrollMode = WebView.OVER_SCROLL_NEVER
+
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -89,5 +98,31 @@ class MainActivity : ComponentActivity() {
     override fun onBackPressed() {
         // Delega o comando de voltar de forma unificada para o JavaScript tratar as telas/modais
         webView.evaluateJavascript("javascript:if(typeof window.handleAndroidBack === 'function') { window.handleAndroidBack(); }", null)
+    }
+
+    /**
+     * Chamado quando o usuário sai do app por ação própria (botão Home ou Recentes).
+     *
+     * O Android NÃO permite interceptar o botão Home — o sistema o consome antes de
+     * chegar aqui, então não há como exibir uma confirmação e cancelar a saída.
+     * O que dá para garantir é que o app não fique pendurado em segundo plano:
+     * encerramos de vez, liberando o decodificador de vídeo e a conexão do stream.
+     * Na próxima abertura o app inicia limpo (a sessão salva mantém o login).
+     */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        pararReproducaoEFechar()
+    }
+
+    private fun pararReproducaoEFechar() {
+        try {
+            // Interrompe o stream antes de sair, senão o player segue baixando em background
+            webView.evaluateJavascript(
+                "javascript:if(typeof window.pararTudo === 'function') { window.pararTudo(); }",
+                null
+            )
+        } catch (_: Exception) {
+        }
+        finishAndRemoveTask()
     }
 }

@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.kotlin.compose)
 }
 
 kotlin {
@@ -57,7 +56,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
-        compose = true
+        // Necessário para BuildConfig.DEBUG: no AGP 8+ não é gerado por padrão.
+        // Usado para ligar a inspeção da WebView apenas em depuração.
+        buildConfig = true
     }
     packaging {
         resources {
@@ -66,25 +67,16 @@ android {
     }
 }
 
+// A UI é 100% WebView (assets/index.html). Nada de Compose, ExoPlayer, Coil ou
+// Navigation aqui: o player roda em JS (mpegts.js) e as imagens no próprio HTML.
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
-    // implementation(libs.androidx.material.icons.extended) // REMOVIDO: Biblioteca muito pesada (aprox 15MB-20MB)
-    
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
-    implementation(libs.coil.compose)
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.ui)
-    implementation(libs.media3.hls)
-    implementation(libs.navigation.compose)
-    implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.androidx.security.crypto)
 
     implementation(libs.room.runtime)
@@ -94,8 +86,4 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
 }

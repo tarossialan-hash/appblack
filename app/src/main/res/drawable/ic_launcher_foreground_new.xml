@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Camada de frente do ícone: a marca Λ em vetor, sem margens extras.
+     O dimensionamento já vem correto do próprio vetor (zona segura de 108dp). -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:drawable="@drawable/ic_launcher_foreground"
-        android:gravity="center"
-        android:top="16dp"
-        android:bottom="16dp"
-        android:left="16dp"
-        android:right="16dp" />
+    <item android:drawable="@drawable/ic_logo_mark" />
 </layer-list>

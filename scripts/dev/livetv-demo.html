@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280, user-scalable=no">
+    <title>BLACK - Live TV Demo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: #121212;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .live-tv-layout {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+            padding: 20px;
+            background-color: #121212;
+            gap: 15px;
+            box-sizing: border-box;
+        }
+
+        .live-col-categories {
+            flex: 0 0 25%;
+            background-color: #1A1A1A;
+            border-radius: 8px;
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+
+        .live-col-channels {
+            flex: 0 0 30%;
+            background-color: #141414;
+            border-radius: 8px;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .live-col-preview {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .live-player-container {
+            width: 100%;
+            padding-top: 56.25%;
+            background-color: #000;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .live-player-placeholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #888;
+        }
+
+        #live-player-title {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            z-index: 2;
+            font-size: 15px;
+        }
+
+        .live-epg-container {
+            flex: 1;
+            background-color: #1A1A1A;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .epg-title {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: #fff;
+        }
+
+        /* Category items */
+        .live-category-item {
+            width: 100%;
+            padding: 12px 24px;
+            margin-bottom: 4px;
+            border-radius: 0;
+            cursor: pointer;
+            color: #aaa;
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.4;
+            text-transform: uppercase;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .live-category-item:hover, .live-category-item:focus {
+            background-color: #2b2b2b;
+            color: #fff;
+            border-color: transparent;
+        }
+
+        .live-category-item.active {
+            background-color: #333333;
+            color: #fff;
+            border-left: 4px solid #f39c12;
+            padding-left: 20px;
+        }
+
+        .live-category-item.active:hover {
+            background-color: #3d3d3d;
+        }
+
+        /* Channel items */
+        .live-channel-item {
+            width: 90%;
+            margin-left: auto;
+            margin-right: auto;
+            padding: 11px 14px;
+            margin-bottom: 6px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #aaa;
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.4;
+            text-transform: uppercase;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .live-channel-item:hover, .live-channel-item:focus {
+            background-color: #333333;
+            color: #fff;
+            border-color: rgba(255,255,255,0.2);
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .live-channel-item.active {
+            background-color: #333333;
+            color: #fff;
+        }
+
+        .channel-logo {
+            width: 45px;
+            height: 35px;
+            border-radius: 4px;
+            object-fit: contain;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+            filter: drop-shadow(0px 1px 2px rgba(0,0,0,0.6));
+            transition: all 0.3s;
+        }
+
+        .live-channel-item:focus .channel-logo,
+        .live-channel-item.active .channel-logo {
+            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.9));
+            transform: scale(1.05);
+        }
+
+        /* EPG items */
+        .epg-item {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+        .epg-time {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .epg-program-title {
+            color: #fff;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .back-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(243, 156, 18, 0.2);
+            border: 1px solid rgba(243, 156, 18, 0.4);
+            color: #f39c12;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+
+        .back-btn:hover {
+            background: rgba(243, 156, 18, 0.3);
+            border-color: rgba(243, 156, 18, 0.6);
+        }
+
+        /* UI de TV: sem barra de rolagem visível */
+        ::-webkit-scrollbar { display: none; }
+        * { scrollbar-width: none; }
+    </style>
+</head>
+<body>
+    <div class="live-tv-layout">
+        <!-- Categorias -->
+        <div class="live-col-categories" id="categories-list"></div>
+
+        <!-- Canais -->
+        <div class="live-col-channels" id="channels-list"></div>
+
+        <!-- Preview -->
+        <div class="live-col-preview">
+            <div class="live-player-container">
+                <video id="demo-player" class="premium-video-player" playsinline autoplay muted loop
+                    style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;background:#000;border-radius:8px;"></video>
+                <div class="live-player-placeholder" style="justify-content:flex-end;background:linear-gradient(to top,rgba(0,0,0,0.6),transparent 40%);">
+                    <div id="live-player-title">Selecione um item para assistir</div>
+                </div>
+            </div>
+
+            <div class="live-epg-container">
+                <h3 class="epg-title" id="epg-title">Programação</h3>
+                <div class="epg-list" id="epg-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dados demo
+        const DATA = {
+            'Categoria Demo 1': [
+                { name: 'Canal Demo 1', color: '#e67e22', epg: [['12:00','Programa Demo A'],['14:00','Programa Demo B'],['16:00','Programa Demo C'],['20:00','Programa Demo D']] },
+                { name: 'Canal Demo 2', color: '#c0392b', epg: [['13:00','Programa Demo A'],['15:00','Programa Demo B'],['19:00','Programa Demo C']] },
+                { name: 'Canal Demo 3', color: '#8e44ad', epg: [['16:00','Programa Demo A'],['17:00','Programa Demo B'],['21:00','Programa Demo C']] },
+                { name: 'Canal Demo 4', color: '#2c3e50', epg: [['22:00','Programa Demo A'],['23:30','Programa Demo B']] }
+            ],
+            'Categoria Demo 2': [
+                { name: 'Canal Demo 5', color: '#16a085', epg: [['14:00','Programa Demo A'],['16:30','Programa Demo B'],['21:00','Programa Demo C']] },
+                { name: 'Canal Demo 6', color: '#2980b9', epg: [['15:00','Programa Demo A'],['20:00','Programa Demo B']] },
+                { name: 'Canal Demo 7', color: '#d35400', epg: [['13:00','Programa Demo A'],['22:00','Programa Demo B']] }
+            ],
+            'Categoria Demo 3': [
+                { name: 'Canal Demo 8', color: '#c0392b', epg: [['12:00','Programa Demo A'],['13:00','Programa Demo B'],['18:00','Programa Demo C']] },
+                { name: 'Canal Demo 9', color: '#e74c3c', epg: [['14:00','Programa Demo A'],['20:00','Programa Demo B']] },
+                { name: 'Canal Demo 10', color: '#3498db', epg: [['19:00','Programa Demo A'],['21:00','Programa Demo B']] }
+            ],
+            'Categoria Demo 4': [
+                { name: 'Canal Demo 11', color: '#2980b9', epg: [['15:00','Programa Demo A'],['18:00','Programa Demo B'],['21:00','Programa Demo C']] },
+                { name: 'Canal Demo 12', color: '#7f8c8d', epg: [['16:00','Programa Demo A'],['22:00','Programa Demo B']] },
+                { name: 'Canal Demo 13', color: '#f1c40f', epg: [['14:00','Programa Demo A'],['20:00','Programa Demo B']] }
+            ],
+            'Categoria Demo 5': [
+                { name: 'Canal Demo 14', color: '#e67e22', epg: [['08:00','Programa Demo A'],['15:00','Programa Demo B'],['18:00','Programa Demo C']] },
+                { name: 'Canal Demo 15', color: '#2980b9', epg: [['09:00','Programa Demo A'],['16:00','Programa Demo B']] },
+                { name: 'Canal Demo 16', color: '#f39c12', epg: [['10:00','Programa Demo A'],['17:00','Programa Demo B']] }
+            ]
+        };
+
+        function logoInitials(name) {
+            const n = name.match(/\d+/);
+            return 'D' + (n ? n[0] : '');
+        }
+
+        function renderCategories() {
+            const container = document.getElementById('categories-list');
+            container.innerHTML = '';
+            Object.keys(DATA).forEach((cat, i) => {
+                const div = document.createElement('div');
+                div.className = 'live-category-item' + (i === 0 ? ' active' : '');
+                div.tabIndex = 0;
+                div.innerText = cat;
+                div.onclick = () => {
+                    document.querySelectorAll('.live-category-item').forEach(el => el.classList.remove('active'));
+                    div.classList.add('active');
+                    renderChannels(cat);
+                };
+                container.appendChild(div);
+            });
+        }
+
+        function renderChannels(cat) {
+            const container = document.getElementById('channels-list');
+            container.innerHTML = '';
+            DATA[cat].forEach((ch, i) => {
+                const div = document.createElement('div');
+                div.className = 'live-channel-item' + (i === 0 ? ' active' : '');
+                div.tabIndex = 0;
+                const logo = `<span class="channel-logo" style="background:${ch.color}">${logoInitials(ch.name)}</span>`;
+                div.innerHTML = `${logo}<span>${ch.name}</span>`;
+                div.onclick = () => {
+                    document.querySelectorAll('.live-channel-item').forEach(el => el.classList.remove('active'));
+                    div.classList.add('active');
+                    selectChannel(ch);
+                };
+                container.appendChild(div);
+            });
+            // Auto seleciona primeiro canal
+            selectChannel(DATA[cat][0]);
+        }
+
+        // Clipes demo de domínio público
+        const DEMO_VIDEOS = [
+            'https://www.w3schools.com/html/mov_bbb.mp4',
+            'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+            'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4'
+        ];
+
+        function selectChannel(ch) {
+            document.getElementById('live-player-title').innerText = 'Assistindo: ' + ch.name;
+            // Escolhe um vídeo demo com base no número do canal
+            const n = parseInt((ch.name.match(/\d+/) || [1])[0], 10);
+            const src = DEMO_VIDEOS[(n - 1) % DEMO_VIDEOS.length];
+            const player = document.getElementById('demo-player');
+            if (player && player.getAttribute('src') !== src) {
+                player.setAttribute('src', src);
+                player.load();
+                player.play().catch(() => {});
+            }
+            renderEpg(ch);
+        }
+
+        function renderEpg(ch) {
+            const container = document.getElementById('epg-list');
+            container.innerHTML = '';
+            ch.epg.forEach(([time, title]) => {
+                const div = document.createElement('div');
+                div.className = 'epg-item';
+                div.innerHTML = `<div class="epg-time">${time}</div><div class="epg-program-title">${title}</div>`;
+                container.appendChild(div);
+            });
+        }
+
+        // Voltar para a home demo (browser: ESC/Backspace | Android TV: botão voltar do controle)
+        function voltarHomeDemo() {
+            window.location.href = 'test.html';
+        }
+        window.handleAndroidBack = voltarHomeDemo; // chamado pelo MainActivity.onBackPressed no APK
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' || e.key === 'Backspace' || e.keyCode === 27 || e.keyCode === 8) {
+                e.preventDefault();
+                voltarHomeDemo();
+            }
+        });
+
+        // Init
+        renderCategories();
+        renderChannels(Object.keys(DATA)[0]);
+    </script>
+</body>
+</html>
