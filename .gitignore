@@ -21,11 +21,5 @@ webplayer/node_modules/
 # AI agent session configs
 .agents/
 
-# Ruflo runtime data (config e agentes ficam versionados)
-.claude-flow/data/
-.claude-flow/logs/
-.claude-flow/sessions/
-.swarm/
-ruvector.db
-ruvector.db-*
+# Config local do Claude Code (não versionar)
 .claude/settings.local.json
