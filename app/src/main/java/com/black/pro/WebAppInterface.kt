@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.core.content.FileProvider
@@ -562,6 +564,27 @@ class WebAppInterface(
             webView.evaluateJavascript("javascript:onUpdateError('Link de atualização inválido.')", null)
             return
         }
+        // Android 8+: instalar um APK exige que o usuário tenha autorizado
+        // "instalar apps desconhecidos" para este app. Sem isso o instalador
+        // simplesmente não abre e "nada acontece" ao clicar. Manda o usuário
+        // para a tela certa e explica; ele volta e clica de novo.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !activity.packageManager.canRequestPackageInstalls()) {
+            webView.evaluateJavascript(
+                "javascript:onUpdateError('Ative a permissão que abriu (instalar apps desconhecidos) para o BLACK e toque em Baixar de novo.')", null)
+            try {
+                activity.startActivity(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${activity.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                webView.evaluateJavascript(
+                    "javascript:onUpdateError('Abra Ajustes > Apps > BLACK e permita instalar apps desconhecidos.')", null)
+            }
+            return
+        }
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val dir = File(activity.cacheDir, "updates").apply { mkdirs() }
@@ -624,7 +647,14 @@ class WebAppInterface(
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 withContext(Dispatchers.Main) {
-                    activity.startActivity(intent)
+                    webView.evaluateJavascript("javascript:onUpdateProgress(100)", null)
+                    try {
+                        activity.startActivity(intent)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        webView.evaluateJavascript(
+                            "javascript:onUpdateError('Baixado, mas não foi possível abrir o instalador neste aparelho.')", null)
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

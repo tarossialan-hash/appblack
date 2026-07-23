@@ -1240,8 +1240,16 @@ function mostrarAcaoUpdate(dados) {
 }
 
 function iniciarInstalacaoUpdate() {
-    if (!_apkUpdateUrl || !window.AndroidApp || !window.AndroidApp.baixarEInstalarApk) return;
     const status = document.getElementById('cfg-update-status');
+    // Feedback em vez de falhar calado — se faltar algo, o usuário vê o motivo.
+    if (!window.AndroidApp || !window.AndroidApp.baixarEInstalarApk) {
+        if (status) status.textContent = 'Instalação automática indisponível nesta versão.';
+        return;
+    }
+    if (!_apkUpdateUrl) {
+        if (status) status.textContent = 'Link da atualização não encontrado. Toque em Verificar de novo.';
+        return;
+    }
     const btnInstalar = document.getElementById('cfg-btn-instalar');
     const prog = document.getElementById('cfg-update-progress');
 
