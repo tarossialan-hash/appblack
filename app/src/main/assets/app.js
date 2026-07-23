@@ -1175,13 +1175,18 @@ function compararVersoes(a, b) {
     return 0;
 }
 
+// Guarda o link do APK da versão nova, entre verificar e instalar
+let _apkUpdateUrl = null;
+
 function verificarAtualizacao() {
     const status = document.getElementById('cfg-update-status');
     const btn = document.getElementById('cfg-btn-verificar');
+    const btnInstalar = document.getElementById('cfg-btn-instalar');
     if (!status) return;
 
     status.textContent = 'Verificando…';
     if (btn) btn.classList.add('cfg-opcao-ocupada');
+    if (btnInstalar) btnInstalar.style.display = 'none';
 
     // cache-buster: o raw do GitHub cacheia por alguns minutos
     fetch(URL_VERSION_JSON + '?t=' + Date.now(), { cache: 'no-store' })
@@ -1195,6 +1200,7 @@ function verificarAtualizacao() {
                 const notas = dados.notes ? ' — ' + dados.notes : '';
                 status.textContent = `Nova versão disponível: ${remota} (instalada: ${local})${notas}`;
                 avisoRapido('Atualização disponível: ' + remota);
+                mostrarAcaoUpdate(dados);
             } else {
                 status.textContent = `Você está na versão mais recente (${local}).`;
             }
@@ -1205,6 +1211,65 @@ function verificarAtualizacao() {
         .finally(() => {
             if (btn) btn.classList.remove('cfg-opcao-ocupada');
         });
+}
+
+/* Mostra o botão de ação certo para a plataforma:
+   - APK: "Baixar e instalar" (baixa o .apk e dispara o instalador)
+   - Web: "Atualizar agora" (recarrega — o webplayer sempre serve o código novo) */
+function mostrarAcaoUpdate(dados) {
+    const btnInstalar = document.getElementById('cfg-btn-instalar');
+    const txt = document.getElementById('cfg-btn-instalar-txt');
+    if (!btnInstalar) return;
+
+    // Só o APK real tem baixarEInstalarApk. Webplayer (WebBridge) e navegador
+    // não têm — para eles, atualizar é recarregar.
+    const temInstalador = !!(window.AndroidApp && window.AndroidApp.baixarEInstalarApk);
+
+    if (temInstalador && dados.apkUrl) {
+        _apkUpdateUrl = dados.apkUrl;
+        if (txt) txt.textContent = 'Baixar e instalar';
+        btnInstalar.onclick = iniciarInstalacaoUpdate;
+        btnInstalar.style.display = 'flex';
+    } else if (!temInstalador) {
+        // Web: recarregar traz a versão nova do servidor
+        if (txt) txt.textContent = 'Atualizar agora';
+        btnInstalar.onclick = () => location.reload(true);
+        btnInstalar.style.display = 'flex';
+    }
+    // APK sem apkUrl no version.json: fica só o aviso, sem botão
+}
+
+function iniciarInstalacaoUpdate() {
+    if (!_apkUpdateUrl || !window.AndroidApp || !window.AndroidApp.baixarEInstalarApk) return;
+    const status = document.getElementById('cfg-update-status');
+    const btnInstalar = document.getElementById('cfg-btn-instalar');
+    const prog = document.getElementById('cfg-update-progress');
+
+    if (btnInstalar) btnInstalar.classList.add('cfg-opcao-ocupada');
+    if (prog) prog.style.display = 'block';
+    if (status) status.textContent = 'Baixando atualização…';
+    window.AndroidApp.baixarEInstalarApk(_apkUpdateUrl);
+}
+
+// Callbacks chamados pelo Kotlin durante o download do APK
+function onUpdateProgress(pct) {
+    const fill = document.getElementById('cfg-update-progress-fill');
+    const status = document.getElementById('cfg-update-status');
+    if (fill) fill.style.width = pct + '%';
+    if (status) {
+        status.textContent = pct >= 100
+            ? 'Download concluído. Abrindo o instalador…'
+            : `Baixando atualização… ${pct}%`;
+    }
+}
+
+function onUpdateError(msg) {
+    const status = document.getElementById('cfg-update-status');
+    const prog = document.getElementById('cfg-update-progress');
+    const btnInstalar = document.getElementById('cfg-btn-instalar');
+    if (status) status.textContent = 'Falha ao baixar: ' + (msg || 'erro desconhecido');
+    if (prog) prog.style.display = 'none';
+    if (btnInstalar) btnInstalar.classList.remove('cfg-opcao-ocupada');
 }
 
 function iniciarConfiguracoes() {

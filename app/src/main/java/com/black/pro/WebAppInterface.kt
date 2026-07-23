@@ -3,10 +3,13 @@ package com.black.pro
 import android.app.Activity
 import android.app.UiModeManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.net.Uri
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.core.content.FileProvider
 import com.black.pro.ui.IPTVViewModel
 import com.black.pro.util.SessionManager
 import kotlinx.coroutines.CoroutineScope
@@ -21,6 +24,9 @@ import com.black.pro.data.remote.NetworkModule
 import com.black.pro.util.FavoritoItem
 import com.black.pro.util.FavoritosManager
 import com.google.gson.Gson
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 class WebAppInterface(
     private val activity: Activity,
@@ -539,6 +545,94 @@ class WebAppInterface(
             // Na dúvida assume TV: é o alvo principal do app, e lá o teclado
             // virtual é o único jeito de digitar.
             true
+        }
+    }
+
+    /**
+     * Baixa o APK da URL e dispara o instalador do sistema. O progresso e o
+     * resultado voltam ao JS por callbacks (onUpdateProgress/onUpdateError).
+     *
+     * A URL precisa ser HTTPS — o download valida o certificado normalmente
+     * (diferente da WebView, que ignora SSL): instalar um APK vindo de conexão
+     * adulterada seria grave.
+     */
+    @JavascriptInterface
+    fun baixarEInstalarApk(url: String) {
+        if (!url.startsWith("https://")) {
+            webView.evaluateJavascript("javascript:onUpdateError('Link de atualização inválido.')", null)
+            return
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val dir = File(activity.cacheDir, "updates").apply { mkdirs() }
+                // Nome novo a cada baixada, e limpa os antigos para não acumular
+                dir.listFiles()?.forEach { it.delete() }
+                val apk = File(dir, "update-${System.currentTimeMillis()}.apk")
+
+                var conn = URL(url).openConnection() as HttpURLConnection
+                conn.instanceFollowRedirects = true
+                conn.connectTimeout = 20000
+                conn.readTimeout = 20000
+                conn.connect()
+
+                // GitHub Releases redireciona para o CDN; segue manualmente se preciso
+                var redirs = 0
+                while (conn.responseCode in 300..399 && redirs < 5) {
+                    val next = conn.getHeaderField("Location") ?: break
+                    conn.disconnect()
+                    conn = URL(next).openConnection() as HttpURLConnection
+                    conn.connectTimeout = 20000
+                    conn.readTimeout = 20000
+                    conn.connect()
+                    redirs++
+                }
+
+                if (conn.responseCode !in 200..299) {
+                    throw Exception("HTTP ${conn.responseCode}")
+                }
+
+                val total = conn.contentLength.toLong()
+                conn.inputStream.use { input ->
+                    apk.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var lidos = 0L
+                        var n: Int
+                        var ultimoPct = -1
+                        while (input.read(buffer).also { n = it } != -1) {
+                            output.write(buffer, 0, n)
+                            lidos += n
+                            if (total > 0) {
+                                val pct = (lidos * 100 / total).toInt()
+                                if (pct != ultimoPct) {
+                                    ultimoPct = pct
+                                    withContext(Dispatchers.Main) {
+                                        webView.evaluateJavascript("javascript:onUpdateProgress($pct)", null)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                conn.disconnect()
+
+                val uri = FileProvider.getUriForFile(
+                    activity, "${activity.packageName}.fileprovider", apk
+                )
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                withContext(Dispatchers.Main) {
+                    activity.startActivity(intent)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    webView.evaluateJavascript(
+                        "javascript:onUpdateError('${escapeJs(e.message ?: "Falha no download")}')", null)
+                }
+            }
         }
     }
 
