@@ -10,7 +10,7 @@ class WebBridge {
         // o deploy de um código novo no servidor; ao recarregar, o usuário pega
         // esta versão. Bumpar aqui é o equivalente web ao "lançar" uma versão.
         localStorage.removeItem('wb_simulated_version');
-        this.simulatedVersion = "1.0.1";
+        this.simulatedVersion = "1.0.2";
 
         // Se já tiver credenciais salvas, começa a buscar em segundo plano
         if (this.serverUrl && this.username && this.password) {
