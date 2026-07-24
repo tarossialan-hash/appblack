@@ -1,6 +1,6 @@
 {
-  "version": "1.0.5",
+  "version": "1.0.4.2",
   "date": "2026-07-24",
-  "notes": "Player de Filmes/Séries trocado para um player nativo (ExoPlayer) — corrige de vez a tela partida em 4K, que persistia mesmo depois dos ajustes anteriores. Os controles de reprodução agora são os padrão do Android (play/pausa/avançar, barra de progresso) em vez dos personalizados. TV ao vivo não muda.",
-  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.5/app-release.apk"
+  "notes": "Correção crítica: a versão 1.0.4.1 foi assinada com uma chave diferente por engano e o Android bloqueava a atualização ('conflito com pacote já existente'). Esta versão volta a usar a mesma assinatura de sempre — atualiza normalmente por cima de qualquer versão anterior. Mantém a correção do crash ao ativar 'Corrigir DNS' e o ajuste da tela partida em filme/episódio 4K.",
+  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.4.2/app-release.apk"
 }

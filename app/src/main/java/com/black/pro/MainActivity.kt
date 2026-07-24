@@ -5,25 +5,15 @@ import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
-import android.view.View
-import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.ViewModelProvider
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.ui.PlayerView
 import com.black.pro.ui.IPTVViewModel
 import com.black.pro.util.SessionManager
 import com.black.pro.vpn.DnsVpnService
@@ -31,9 +21,7 @@ import com.black.pro.vpn.DnsVpnService
 class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
-    private lateinit var playerView: PlayerView
     private lateinit var viewModel: IPTVViewModel
-    private var exoPlayer: ExoPlayer? = null
 
     // Precisa ser registrado antes da Activity chegar em STARTED — por isso é
     // campo de classe, e não algo criado sob demanda dentro de onCreate.
@@ -133,29 +121,8 @@ class MainActivity : ComponentActivity() {
             "AndroidApp"
         )
 
-        // PlayerView nativa (Media3/ExoPlayer) — usada pra todo VOD (filme/
-        // episódio, ver tocarVideoNativo). Fica por cima da WebView na mesma
-        // FrameLayout, escondida até ser preciso: o <video> do WebView compõe
-        // cada quadro numa textura de GPU (SurfaceTexture), e em UHD alguns
-        // chips de TV box corrompem essa textura — sai como imagem partida ao
-        // meio. A PlayerView desenha direto numa superfície de vídeo dedicada,
-        // fora desse caminho, com os próprios controles (play/pausa/avançar).
-        playerView = PlayerView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            visibility = View.GONE
-            keepScreenOn = true
-            setShowNextButton(false)
-            setShowPreviousButton(false)
-        }
-
-        val root = FrameLayout(this).apply {
-            addView(webView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            addView(playerView)
-        }
-        setContentView(root)
+        // Definir a WebView como o conteúdo da Activity
+        setContentView(webView)
 
         // Carregar o arquivo HTML principal
         webView.loadUrl("file:///android_asset/index.html")
@@ -227,98 +194,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ---------- Player nativo (ExoPlayer) — todo VOD (filme/episódio) ----------
-
-    /** Chamado pela ponte JS (WebAppInterface.tocarVideoNativo). */
-    fun tocarVideoNativo(url: String) {
-        pararVideoNativo()
-        try {
-            // Mesmo User-Agent que o proxy de desenvolvimento já usa pro Xtream
-            // (scripts/dev/server.js) — painéis Xtream costumam filtrar por
-            // User-Agent, e o ExoPlayer manda um próprio por padrão que o
-            // provedor pode não reconhecer.
-            val dataSourceFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("IPTVSmarters/1.0 (okhttp/4.9.0)")
-            val mediaSourceFactory = DefaultMediaSourceFactory(this)
-                .setDataSourceFactory(dataSourceFactory)
-
-            val player = ExoPlayer.Builder(this)
-                .setMediaSourceFactory(mediaSourceFactory)
-                .build()
-            player.addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_ENDED) {
-                        notificarVideoNativoTerminou()
-                    }
-                }
-
-                override fun onPlayerError(error: PlaybackException) {
-                    android.util.Log.w("MainActivity", "Erro no player nativo (VOD)", error)
-                    notificarErroVideoNativo(error.message ?: "Falha ao reproduzir")
-                }
-            })
-
-            exoPlayer = player
-            playerView.player = player
-            playerView.visibility = View.VISIBLE
-            playerView.requestFocus()
-
-            player.setMediaItem(MediaItem.fromUri(url))
-            player.prepare()
-            player.playWhenReady = true
-        } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Falha ao iniciar o player nativo (VOD)", e)
-            notificarErroVideoNativo(e.message ?: "Falha ao iniciar o player")
-            pararVideoNativo()
-        }
-    }
-
-    /** Chamado pela ponte JS e sempre que o app sai de cena. */
-    fun pararVideoNativo() {
-        if (::playerView.isInitialized) {
-            playerView.player = null
-            playerView.visibility = View.GONE
-        }
-        try {
-            exoPlayer?.release()
-        } catch (_: Exception) {
-        }
-        exoPlayer = null
-    }
-
-    fun videoNativoAtivo(): Boolean = ::playerView.isInitialized && playerView.visibility == View.VISIBLE
-
-    private fun notificarVideoNativoTerminou() {
-        try {
-            webView.evaluateJavascript(
-                "javascript:if(typeof window.onNativeVideoEnded === 'function') { window.onNativeVideoEnded(); }",
-                null
-            )
-        } catch (_: Exception) {
-        }
-    }
-
-    private fun notificarErroVideoNativo(mensagem: String) {
-        val escapada = mensagem.replace("\\", "\\\\").replace("'", "\\'")
-            .replace("\n", "\\n").replace("\r", "\\r")
-        try {
-            webView.evaluateJavascript(
-                "javascript:if(typeof window.onNativeVideoError === 'function') { window.onNativeVideoError('$escapada'); }",
-                null
-            )
-        } catch (_: Exception) {
-        }
-    }
-
     override fun onBackPressed() {
-        // Player nativo (VOD) tem prioridade: fecha ele direto, sem passar
-        // pelo JS — a WebView por trás nem está com o player em tela cheia
-        // "aberto" do ponto de vista dela, então handleAndroidBack não
-        // saberia o que fazer com isto.
-        if (videoNativoAtivo()) {
-            pararVideoNativo()
-            return
-        }
         // Delega o comando de voltar de forma unificada para o JavaScript tratar as telas/modais
         webView.evaluateJavascript("javascript:if(typeof window.handleAndroidBack === 'function') { window.handleAndroidBack(); }", null)
     }
@@ -347,7 +223,6 @@ class MainActivity : ComponentActivity() {
      */
     override fun onStop() {
         super.onStop()
-        pararVideoNativo()
         try {
             webView.evaluateJavascript(
                 "javascript:if(typeof window.pararTudo === 'function') { window.pararTudo(); }",
@@ -363,7 +238,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun pararReproducaoEFechar() {
-        pararVideoNativo()
         try {
             // Interrompe o stream antes de sair, senão o player segue baixando em background
             webView.evaluateJavascript(
