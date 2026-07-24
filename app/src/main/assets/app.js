@@ -2124,6 +2124,20 @@ function playFullscreenVideo(streamUrl, title) {
             fsPlayer.addEventListener('error', esconderLoader, { once: true });
         }
 
+        // Tira o player de dentro de #tv-canvas (transform: scale()) enquanto
+        // toca. Um <video> decodificado por hardware precisa recompor sua
+        // superfície sempre que algum ancestral tem transform — em stream 4K
+        // é exatamente isso que aparecia como imagem partida/duplicada lado a
+        // lado, independente do container (.ts ou .mp4). Fora do canvas, o
+        // position:fixed volta a valer pra viewport real — por isso troca de
+        // var(--tv-w)/var(--tv-h) (unidades do canvas) pra 100vw/100vh.
+        const tvCanvas = document.getElementById('tv-canvas');
+        if (tvCanvas && fsContainer.parentElement === tvCanvas) {
+            document.body.appendChild(fsContainer);
+            fsContainer.style.width = '100vw';
+            fsContainer.style.height = '100vh';
+        }
+
         fsContainer.style.display = 'block';
 
         // .ts (MPEG-TS) cru não é demuxado pelo <video> do WebView — só HLS/mp4
@@ -2160,17 +2174,11 @@ function playFullscreenVideo(streamUrl, title) {
         }
         setTimeout(() => { const fb = document.getElementById('fs-btn-play'); if (fb) fb.focus(); }, 200);
 
-        // Sem requestFullscreen nativo, de propósito.
-        //
-        // #fs-player-container já é position:fixed com var(--tv-w)/var(--tv-h),
-        // ou seja, cobre a tela inteira só com CSS — o fullscreen nativo não
-        // acrescentava nada visualmente.
-        //
-        // Em compensação, ele custava caro: o container vive dentro de
-        // #tv-canvas, que tem transform: scale(). Promover a fullscreen nativo
-        // um elemento dentro de subárvore transformada obriga o WebView a
-        // recompor a superfície de vídeo no meio da decodificação, e é aí que
-        // aparecem quadros fantasma / imagem duplicada em stream 4K.
+        // Sem requestFullscreen nativo, de propósito: #fs-player-container já
+        // é position:fixed cobrindo a tela inteira só com CSS (ver reparent
+        // acima) — o fullscreen nativo não acrescentaria nada visualmente, e
+        // ainda obrigaria o WebView a recompor a superfície de vídeo no meio
+        // da decodificação.
     }
 }
 
@@ -4136,6 +4144,17 @@ function closeFullscreenPlayer() {
     fsPlayer.src = '';
     fsContainer.style.display = 'none';
 
+    // Devolve o container pra dentro de #tv-canvas (ver playFullscreenVideo) e
+    // restaura as unidades do canvas — sem isto, a próxima vez que qualquer
+    // outra coisa dependesse da ordem normal do DOM dentro do canvas
+    // encontraria o player fora do lugar.
+    const tvCanvas = document.getElementById('tv-canvas');
+    if (tvCanvas && fsContainer.parentElement !== tvCanvas) {
+        tvCanvas.appendChild(fsContainer);
+        fsContainer.style.width = 'var(--tv-w)';
+        fsContainer.style.height = 'var(--tv-h)';
+    }
+
     // Se o usuário saiu antes do 'playing' disparar, o loader nunca foi
     // escondido — trava aberto pra próxima vez que abrir o player.
     const fsLoader = document.getElementById('fs-player-loader');
@@ -4487,13 +4506,24 @@ function abrirExitModal() {
     lastFocusedBeforeExit = document.activeElement;
     const modal = document.getElementById('exit-confirm-modal');
     const playerContainer = document.getElementById('fs-player-container');
+    const playerTocando = playerContainer && playerContainer.style.display !== 'none';
     const titleEl = modal ? modal.querySelector('.exit-modal-title') : null;
     if (titleEl) {
-        if (playerContainer && playerContainer.style.display !== 'none') {
+        if (playerTocando) {
             titleEl.textContent = 'Deseja realmente fechar a reprodução?';
         } else {
             titleEl.textContent = 'Deseja realmente sair do aplicativo?';
         }
+    }
+    // Esta confirmação abre por cima do player ainda tocando (não fecha ele
+    // antes). Como o player em si sai de dentro de #tv-canvas enquanto toca
+    // (ver playFullscreenVideo), o modal precisa acompanhar pro mesmo nível —
+    // senão fica escondido atrás do vídeo em vez de aparecer por cima.
+    const tvCanvas = document.getElementById('tv-canvas');
+    if (modal && playerTocando && tvCanvas && modal.parentElement === tvCanvas) {
+        document.body.appendChild(modal);
+        modal.style.width = '100vw';
+        modal.style.height = '100vh';
     }
     if (modal) {
         modal.style.display = 'flex';
@@ -4511,6 +4541,14 @@ function fecharExitModal() {
         modal.classList.remove('show');
         setTimeout(() => {
             modal.style.display = 'none';
+            // Devolve pro lugar original dentro de #tv-canvas, se tiver sido
+            // movido em abrirExitModal (player tocando por trás).
+            const tvCanvas = document.getElementById('tv-canvas');
+            if (tvCanvas && modal.parentElement !== tvCanvas) {
+                tvCanvas.appendChild(modal);
+                modal.style.width = 'var(--tv-w)';
+                modal.style.height = 'var(--tv-h)';
+            }
             if (lastFocusedBeforeExit) {
                 lastFocusedBeforeExit.focus();
                 lastFocusedBeforeExit = null;

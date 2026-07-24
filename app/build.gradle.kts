@@ -7,14 +7,28 @@ plugins {
 }
 
 // Credenciais da keystore de release — nunca no build.gradle.kts nem no git,
-// só neste arquivo local (ignorado pelo .gitignore). Sem ele, o build de
-// release cai pra assinatura de debug (dá pra compilar localmente, mas esse
-// APK/AAB não serve pra publicar/atualizar o app na Play Store).
+// só neste arquivo local (ignorado pelo .gitignore).
 val keystorePropertiesFile = file("keystore.properties")
 val temKeystoreDeRelease = keystorePropertiesFile.exists()
 val keystoreProperties = Properties().apply {
     if (temKeystoreDeRelease) load(FileInputStream(keystorePropertiesFile))
 }
+
+// Todas as versões já publicadas (1.0.1 a 1.0.4) foram assinadas com a chave
+// de DEBUG — é o certificado que já está instalado no aparelho de cada
+// cliente. Trocar de chave muda a assinatura do pacote com.black.pro, e o
+// Android recusa instalar por cima ("conflito com um pacote já existente")
+// qualquer atualização assinada com um certificado diferente do que já está
+// instalado — não tem meio-termo, o cliente teria que desinstalar o app
+// primeiro. Foi exatamente o que aconteceu na 1.0.4.1: assinei com a chave de
+// release nova sem perceber essa consequência, e quebrou a atualização pra
+// todo mundo que já tinha o app instalado.
+//
+// Então: ligar isto só numa migração deliberada e avisada com antecedência
+// (ex.: junto do envio pra Play Store, onde a instalação já vem de outro
+// canal). Enquanto a distribuição for pelo GitHub Release + auto-update
+// dentro do próprio app, mantenha false.
+val usarKeystoreDeRelease = false
 
 kotlin {
     compilerOptions {
@@ -34,8 +48,8 @@ android {
         applicationId = "com.black.pro"
         minSdk = 24
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.0.4.1"
+        versionCode = 9
+        versionName = "1.0.4.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -65,11 +79,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
 
-            // Com a keystore.properties (local, fora do git) usa a chave de
-            // release de verdade — obrigatória pra publicar/atualizar na Play
-            // Store. Sem ela (ex.: outra máquina sem o arquivo), cai pra
-            // debug só pra não travar o build local.
-            signingConfig = if (temKeystoreDeRelease) {
+            // Ver o comentário de usarKeystoreDeRelease acima antes de mexer aqui.
+            signingConfig = if (usarKeystoreDeRelease && temKeystoreDeRelease) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
