@@ -233,6 +233,20 @@ class WebAppInterface(
         prefs.edit().putString("dns_primary", valido).apply()
     }
 
+    /**
+     * Player nativo (ExoPlayer) — usado pra todo VOD (filme/episódio). O
+     * <video> do WebView compõe cada quadro numa textura de GPU e corrompe a
+     * imagem em UHD em alguns aparelhos (ver MainActivity.tocarVideoNativo);
+     * o ExoPlayer evita isso desenhando numa superfície dedicada. Sem
+     * controles próprios daqui: a PlayerView já mostra os controles nativos
+     * dela (play/pausa/avançar) por cima da WebView, e fecha pelo botão
+     * Voltar (tratado direto em MainActivity.onBackPressed).
+     */
+    @JavascriptInterface
+    fun tocarVideoNativo(url: String) {
+        activity.runOnUiThread { activity.tocarVideoNativo(url) }
+    }
+
     @JavascriptInterface
     fun getStreamUrl(streamId: Int): String {
         val u = sessionManager.getUsername() ?: return ""

@@ -38,7 +38,10 @@ kotlin {
 
 android {
     namespace = "com.black.pro"
-    compileSdk = 34
+    // media3/ExoPlayer 1.10 exige compileSdk 36+. Isto só muda contra quais
+    // APIs o código compila — não afeta o comportamento do app em runtime,
+    // diferente de targetSdk (esse continua em 34, deliberadamente).
+    compileSdk = 36
 
     androidResources {
         localeFilters += listOf("pt", "en")
@@ -48,8 +51,8 @@ android {
         applicationId = "com.black.pro"
         minSdk = 24
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.0.4.2"
+        versionCode = 10
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -108,8 +111,12 @@ android {
     }
 }
 
-// A UI é 100% WebView (assets/index.html). Nada de Compose, ExoPlayer, Coil ou
-// Navigation aqui: o player roda em JS (mpegts.js) e as imagens no próprio HTML.
+// A UI é 100% WebView (assets/index.html), exceto o player de VOD (filme/
+// episódio): esse usa ExoPlayer (media3) nativo. O <video> do WebView compõe
+// cada quadro numa textura de GPU (SurfaceTexture), e em UHD alguns chips de
+// TV box corrompem essa textura (imagem partida ao meio); o ExoPlayer desenha
+// direto numa superfície de vídeo dedicada, fora desse caminho — ver
+// MainActivity.kt. TV ao vivo continua no <video> do WebView com mpegts.js.
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.ktx)
@@ -119,6 +126,8 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
 
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
