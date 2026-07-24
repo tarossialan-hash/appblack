@@ -2093,6 +2093,21 @@ function abrirDetalheProvider(tmdbItem, isSeries) {
 }
 
 function playFullscreenVideo(streamUrl, title) {
+    // Todo VOD (filme/episódio) toca no player nativo (ExoPlayer,
+    // MainActivity.tocarVideoNativo), com os próprios controles dele
+    // (play/pausa/avançar) — o <video> do WebView compõe cada quadro numa
+    // textura de GPU (SurfaceTexture), e em UHD alguns chips de TV box
+    // corrompem essa textura (imagem partida ao meio); o ExoPlayer desenha
+    // direto numa superfície de vídeo dedicada, fora desse caminho.
+    //
+    // Sem a ponte nativa (testando no navegador) cai no <video> do WebView
+    // logo abaixo, único jeito de tocar algo fora do app Android.
+    if (window.AndroidApp && window.AndroidApp.tocarVideoNativo) {
+        pararPlayerAoVivo();
+        window.AndroidApp.tocarVideoNativo(streamUrl);
+        return;
+    }
+
     const fsContainer = document.getElementById('fs-player-container');
     const fsPlayer    = document.getElementById('fullscreen-player');
     const fsLogo      = document.getElementById('fs-logo');
@@ -2181,6 +2196,27 @@ function playFullscreenVideo(streamUrl, title) {
         // da decodificação.
     }
 }
+
+/**
+ * Callbacks do player nativo (ExoPlayer, todo VOD) — ver
+ * MainActivity.tocarVideoNativo / WebAppInterface.tocarVideoNativo. A
+ * PlayerView cobre a tela por cima da WebView com os próprios controles
+ * nativos; daqui só entra o autoplay do próximo episódio (mesma lógica do
+ * 'ended' do <video> comum) e o aviso de erro.
+ */
+window.onNativeVideoEnded = function() {
+    const lista = window._seriesAutoplayList;
+    const atual = window._seriesAutoplayIndex;
+    if (!lista || atual == null || atual < 0) return;
+    const proximo = atual + 1;
+    if (lista[proximo]) {
+        tocarEpisodioDaLista(proximo);
+    }
+};
+
+window.onNativeVideoError = function(mensagem) {
+    avisoRapido('Erro ao reproduzir: ' + (mensagem || 'falha desconhecida'));
+};
 
 // Resolve a URL de stream de um episódio — mesma lógica usada no card e no
 // autoplay, pra nunca divergir entre os dois caminhos.
