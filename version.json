@@ -1,6 +1,6 @@
 {
-  "version": "1.0.3.2",
+  "version": "1.0.4",
   "date": "2026-07-24",
-  "notes": "Categoria Favoritos em Filmes e Séries, tela branca com play gigante corrigida (loader no início do vídeo), corte de imagem no destaque das séries ajustado, navegação da busca mais fluida, botão Atualizar com foco visual corrigido, carrossel da home só exibe itens com sinopse, ano e logo completos.",
-  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.3.2/app-release.apk"
+  "notes": "Correção de DNS (Config > VPN, 1.1.1.1/8.8.8.8) para quando capas e informações do TMDB não carregam por bloqueio da operadora, filme/episódio 4K com imagem partida ao meio corrigido, tempo pra favoritar canal segurando OK reduzido, teclado da busca e cards de streaming/filmes novos redesenhados, botão Atualizar App abre direto na aba certa.",
+  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.4/app-release.apk"
 }

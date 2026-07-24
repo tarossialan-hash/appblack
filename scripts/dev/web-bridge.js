@@ -622,6 +622,32 @@ class WebBridge {
             onSeriesListLoaded(JSON.stringify(series), true);
         }
     }
+
+    // ---- VPN / DNS ----
+    // No navegador não existe VpnService de verdade (isso é coisa do Android),
+    // então aqui só simula o toggle com localStorage pra dar pra testar a tela
+    // de Configurações. No app real, quem responde é o MainActivity via
+    // onDnsFixResult, depois do diálogo de permissão de VPN — aqui não tem
+    // permissão nenhuma pra pedir, então já confirma na hora.
+
+    getDnsFixEnabled() {
+        return localStorage.getItem('wb_dns_fix_enabled') === '1';
+    }
+
+    setDnsFixEnabled(enabled) {
+        localStorage.setItem('wb_dns_fix_enabled', enabled ? '1' : '0');
+        if (typeof onDnsFixResult === 'function') {
+            onDnsFixResult(!!enabled);
+        }
+    }
+
+    getDnsPrimary() {
+        return localStorage.getItem('wb_dns_primary') || '1.1.1.1';
+    }
+
+    setDnsPrimary(server) {
+        localStorage.setItem('wb_dns_primary', server === '8.8.8.8' ? '8.8.8.8' : '1.1.1.1');
+    }
 }
 
 // Injetar o WebBridge automaticamente se não estivermos no Android Nativo

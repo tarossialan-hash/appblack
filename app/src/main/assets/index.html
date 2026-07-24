@@ -384,6 +384,10 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
                     <span>Atualização</span>
                 </button>
+                <button class="cfg-aba" data-aba="vpn" tabindex="0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+                    <span>VPN</span>
+                </button>
 
                 <div class="cfg-menu-rodape">
                     <button class="cfg-aba cfg-aba-acao" id="cfg-btn-deslogar" tabindex="0">
@@ -435,6 +439,38 @@
                             <span class="cfg-switch-texto">Bloqueio Adulto: <strong id="cfg-adulto-estado">Desligado</strong></span>
                         </button>
                         <p class="cfg-nota">Quando ligado, categorias adultas deixam de aparecer em TV ao vivo, Filmes e Séries.</p>
+                    </div>
+                </section>
+
+                <!-- VPN -->
+                <section class="cfg-painel" data-painel="vpn">
+                    <h2 class="cfg-painel-titulo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+                        VPN
+                    </h2>
+                    <div class="cfg-cartao">
+                        <button class="cfg-switch-linha" id="cfg-switch-dns" tabindex="0">
+                            <span class="cfg-switch"><span class="cfg-switch-bola"></span></span>
+                            <span class="cfg-switch-texto">Corrigir DNS: <strong id="cfg-dns-estado">Desligado</strong></span>
+                        </button>
+                        <p class="cfg-nota">Ativa uma VPN local que só troca o servidor de DNS do aparelho — o resto da conexão continua normal. Ajuda quando capas, informações ou canais não carregam por causa da DNS da operadora. O Android pode pedir uma permissão de VPN na primeira vez.</p>
+                    </div>
+                    <div class="cfg-cartao">
+                        <div class="cfg-cartao-titulo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                            Servidor de DNS
+                        </div>
+                        <div class="cfg-opcoes">
+                            <button class="cfg-opcao" data-dns="1.1.1.1" tabindex="0">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                                <span>1.1.1.1 (Cloudflare)</span>
+                            </button>
+                            <button class="cfg-opcao" data-dns="8.8.8.8" tabindex="0">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                                <span>8.8.8.8 (Google)</span>
+                            </button>
+                        </div>
+                        <p class="cfg-nota" id="cfg-nota-dns"></p>
                     </div>
                 </section>
 

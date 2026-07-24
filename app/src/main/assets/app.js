@@ -1057,7 +1057,12 @@ function filtrarAdulto(categorias) {
     });
 }
 
-function abrirConfiguracoes() {
+/**
+ * @param {string} [aba] Aba a abrir já selecionada — "player" (padrão) quando
+ * chamado pelo botão de engrenagem, ou outra quando vem de um atalho direto
+ * (ex.: o selo "Atualizar App" da top-nav abrindo já em "atualizacao").
+ */
+function abrirConfiguracoes(aba) {
     const tela = document.getElementById('settings-screen');
     if (!tela) return;
 
@@ -1065,13 +1070,19 @@ function abrirConfiguracoes() {
     // tocando por trás seria o mesmo bug que corrigimos na troca de abas.
     pararPlayerAoVivo();
 
+    const nomeAba = aba || 'player';
     tela.style.display = 'block';
-    selecionarAbaConfig('player');
+    selecionarAbaConfig(nomeAba);
     sincronizarControlesConfig();
 
     setTimeout(() => {
-        const primeira = tela.querySelector('.cfg-aba');
-        if (primeira) primeira.focus();
+        // Foca o botão da aba que foi de fato aberta, não sempre o de Player.
+        // Sem isto, quem entrava direto em outra aba (ex.: Atualização, pelo
+        // selo da top-nav) via o painel certo já ativo, mas o foco do D-pad
+        // ficava parado no botão Player — o próximo movimento saía do lugar
+        // errado.
+        const botaoAba = tela.querySelector(`.cfg-aba[data-aba="${nomeAba}"]`) || tela.querySelector('.cfg-aba');
+        if (botaoAba) botaoAba.focus();
     }, 60);
 }
 
@@ -1137,7 +1148,35 @@ function sincronizarControlesConfig() {
     const ligado = bloqueioAdultoLigado();
     if (linha) linha.classList.toggle('ligado', ligado);
     if (estado) estado.textContent = ligado ? 'Ligado' : 'Desligado';
+
+    const linhaDns = document.getElementById('cfg-switch-dns');
+    const estadoDns = document.getElementById('cfg-dns-estado');
+    const dnsLigado = (window.AndroidApp && window.AndroidApp.getDnsFixEnabled)
+        ? window.AndroidApp.getDnsFixEnabled() : false;
+    if (linhaDns) linhaDns.classList.toggle('ligado', dnsLigado);
+    if (estadoDns) estadoDns.textContent = dnsLigado ? 'Ligado' : 'Desligado';
+
+    const dnsPrimario = (window.AndroidApp && window.AndroidApp.getDnsPrimary)
+        ? window.AndroidApp.getDnsPrimary() : '1.1.1.1';
+    document.querySelectorAll('.cfg-opcao[data-dns]').forEach(b => {
+        b.classList.toggle('selecionada', b.getAttribute('data-dns') === dnsPrimario);
+    });
+    const notaDns = document.getElementById('cfg-nota-dns');
+    if (notaDns) {
+        const outro = dnsPrimario === '8.8.8.8' ? '1.1.1.1' : '8.8.8.8';
+        notaDns.textContent = `Usado quando a correção de DNS está ligada. Se ${dnsPrimario} não responder, cai para ${outro} automaticamente.`;
+    }
 }
+
+/**
+ * Chamado pelo Kotlin depois de ligar/desligar a VPN de DNS — a permissão de
+ * VPN é um diálogo assíncrono do sistema, então o resultado não dá pra saber
+ * na hora do clique.
+ */
+window.onDnsFixResult = function(ligado) {
+    sincronizarControlesConfig();
+    avisoRapido(ligado ? '✓ Correção de DNS ativada' : 'Correção de DNS desligada');
+};
 
 function carregarInfoAssinatura() {
     const grade = document.getElementById('cfg-info-grade');
@@ -1326,8 +1365,7 @@ function mostrarAvisoUpdateNoMenu(visivel) {
  *  separado — vai direto pra aba de Configurações que já tem tudo pronto:
  *  status, notas da versão e o botão de baixar/instalar. */
 function abrirUpdateConfirmModalDirectly() {
-    abrirConfiguracoes();
-    selecionarAbaConfig('atualizacao');
+    abrirConfiguracoes('atualizacao');
     verificarAtualizacao();
 }
 
@@ -1435,6 +1473,29 @@ function iniciarConfiguracoes() {
         };
     }
 
+    const linhaDns = document.getElementById('cfg-switch-dns');
+    if (linhaDns) {
+        linhaDns.onclick = () => {
+            if (!window.AndroidApp || !window.AndroidApp.setDnsFixEnabled) return;
+            const dnsLigadoAgora = window.AndroidApp.getDnsFixEnabled
+                ? window.AndroidApp.getDnsFixEnabled() : false;
+            // O estado real do switch só é confirmado por onDnsFixResult (a
+            // permissão de VPN é um diálogo assíncrono do Android).
+            window.AndroidApp.setDnsFixEnabled(!dnsLigadoAgora);
+        };
+    }
+
+    tela.querySelectorAll('.cfg-opcao[data-dns]').forEach(botao => {
+        botao.onclick = () => {
+            const servidor = botao.getAttribute('data-dns');
+            if (window.AndroidApp && window.AndroidApp.setDnsPrimary) {
+                window.AndroidApp.setDnsPrimary(servidor);
+            }
+            sincronizarControlesConfig();
+            avisoRapido('DNS principal: ' + servidor);
+        };
+    });
+
     const btnDeslogar = document.getElementById('cfg-btn-deslogar');
     if (btnDeslogar) btnDeslogar.onclick = () => { fecharConfiguracoes(); abrirLogoutModal(); };
 
@@ -1456,8 +1517,11 @@ function iniciarConfiguracoes() {
 // A barra só começa a preencher depois de MS_ATRASO_BARRA: num toque curto
 // (abrir o canal) ela nem chega a aparecer, que era o que dava a impressão de
 // que um clique simples já ia favoritar.
-const MS_ATRASO_BARRA = 300;
-const MS_PRESSAO_LONGA = 1300;
+// Reduzido de 1300 para 700: em vários controles/boxes mais simples o clique
+// físico já é curto por natureza, e 1300ms de segurada não dava tempo de
+// completar antes do usuário soltar — o cliente segurava e nada acontecia.
+const MS_ATRASO_BARRA = 200;
+const MS_PRESSAO_LONGA = 700;
 
 // O CSS lê estes mesmos valores — assim o fim da animação coincide com o
 // disparo do favorito, em vez de dois números soltos que podem divergir.
@@ -2061,8 +2125,29 @@ function playFullscreenVideo(streamUrl, title) {
         }
 
         fsContainer.style.display = 'block';
-        fsPlayer.src = streamUrl;
-        fsPlayer.play().catch(e => console.log('Autoplay bloqueado:', e));
+
+        // .ts (MPEG-TS) cru não é demuxado pelo <video> do WebView — só HLS/mp4
+        // tocam direto no src. Provedor costuma entregar filme/episódio 4K nesse
+        // container (sem remuxar pra mp4), e sem demuxer o decodificador recebe
+        // o stream errado e a imagem sai partida/duplicada lado a lado. A TV ao
+        // vivo já resolve isso com mpegts.js (playLiveStream); aqui é o mesmo
+        // tratamento para VOD (isLive: false).
+        if (/\.ts(\?|$)/i.test(streamUrl) && typeof mpegts !== 'undefined' && mpegts.getFeatureList().mseLivePlayback) {
+            fsMpegtsPlayer = mpegts.createPlayer(
+                { type: 'mpegts', isLive: false, url: streamUrl },
+                { enableStashBuffer: true, lazyLoad: false }
+            );
+            fsMpegtsPlayer.on(mpegts.Events.ERROR, (tipo, detalhe) => {
+                console.error('Erro no player de VOD (ts):', tipo, detalhe);
+            });
+            fsMpegtsPlayer.attachMediaElement(fsPlayer);
+            fsMpegtsPlayer.load();
+            fsMpegtsPlayer.play().catch(e => console.log('Autoplay bloqueado:', e));
+        } else {
+            fsPlayer.src = streamUrl;
+            fsPlayer.play().catch(e => console.log('Autoplay bloqueado:', e));
+        }
+
         fsPlayer.focus();
         if (window.currentTmdb && window.currentTmdb.logoUrl) {
             fsLogo.src = window.currentTmdb.logoUrl;

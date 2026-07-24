@@ -32,6 +32,18 @@
         android:usesCleartextTraffic="true"
         android:banner="@drawable/tv_banner">
 
+        <!-- VPN local só-DNS: troca a DNS do sistema para 1.1.1.1/8.8.8.8 (Config > Rede),
+             sem tunelar o resto do tráfego. Corrige TMDB/pôsteres quando a DNS do
+             provedor de internet do cliente falha ou bloqueia esses domínios. -->
+        <service
+            android:name=".vpn.DnsVpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
         <!-- FileProvider: entrega o APK baixado ao instalador do sistema -->
         <provider
             android:name="androidx.core.content.FileProvider"

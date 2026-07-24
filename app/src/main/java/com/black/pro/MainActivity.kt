@@ -1,22 +1,40 @@
 package com.black.pro
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.net.VpnService
 import android.os.Bundle
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.ViewModelProvider
 import com.black.pro.ui.IPTVViewModel
 import com.black.pro.util.SessionManager
+import com.black.pro.vpn.DnsVpnService
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private lateinit var viewModel: IPTVViewModel
+
+    // Precisa ser registrado antes da Activity chegar em STARTED — por isso é
+    // campo de classe, e não algo criado sob demanda dentro de onCreate.
+    private val vpnPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            iniciarServicoDns()
+        } else {
+            // Usuário recusou a permissão de VPN nas configurações do sistema
+            notificarResultadoDns(false)
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,6 +126,57 @@ class MainActivity : ComponentActivity() {
 
         // Carregar o arquivo HTML principal
         webView.loadUrl("file:///android_asset/index.html")
+
+        // Retoma a correção de DNS se o usuário deixou ligada numa sessão
+        // anterior. Se a permissão de VPN já foi concedida, VpnService.prepare
+        // devolve null e isto liga de novo sem pedir nada — só pede outra vez
+        // se o usuário revogou a permissão pelas Configurações do Android.
+        if (getSharedPreferences("black_app_prefs", Context.MODE_PRIVATE)
+                .getBoolean("dns_fix_enabled", false)
+        ) {
+            ativarCorrecaoDns()
+        }
+    }
+
+    /**
+     * Ativa a VPN local que corrige a DNS do sistema (ver DnsVpnService).
+     * Chamado pela ponte JS (Config > Rede) e na retomada automática acima.
+     */
+    fun ativarCorrecaoDns() {
+        val intent = VpnService.prepare(this)
+        if (intent != null) {
+            vpnPermissionLauncher.launch(intent)
+        } else {
+            iniciarServicoDns()
+        }
+    }
+
+    fun desativarCorrecaoDns() {
+        startService(Intent(this, DnsVpnService::class.java).setAction(DnsVpnService.ACTION_STOP))
+        getSharedPreferences("black_app_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean("dns_fix_enabled", false).apply()
+        notificarResultadoDns(false)
+    }
+
+    private fun iniciarServicoDns() {
+        try {
+            startService(Intent(this, DnsVpnService::class.java))
+            getSharedPreferences("black_app_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("dns_fix_enabled", true).apply()
+            notificarResultadoDns(true)
+        } catch (e: Exception) {
+            notificarResultadoDns(false)
+        }
+    }
+
+    private fun notificarResultadoDns(ligado: Boolean) {
+        try {
+            webView.evaluateJavascript(
+                "javascript:if(typeof window.onDnsFixResult === 'function') { window.onDnsFixResult($ligado); }",
+                null
+            )
+        } catch (_: Exception) {
+        }
     }
 
     override fun onBackPressed() {

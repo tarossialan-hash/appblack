@@ -1,6 +1,5 @@
 package com.black.pro
 
-import android.app.Activity
 import android.app.UiModeManager
 import android.content.Context
 import android.content.Intent
@@ -31,7 +30,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class WebAppInterface(
-    private val activity: Activity,
+    private val activity: MainActivity,
     private val webView: WebView,
     private val viewModel: IPTVViewModel,
     private val sessionManager: SessionManager
@@ -205,6 +204,33 @@ class WebAppInterface(
     fun setFormatoLive(formato: String) {
         val valido = if (formato == "m3u8") "m3u8" else "ts"
         prefs.edit().putString("formato_live", valido).apply()
+    }
+
+    /** Estado salvo do toggle "Corrigir DNS" (Config > Rede). */
+    @JavascriptInterface
+    fun getDnsFixEnabled(): Boolean = prefs.getBoolean("dns_fix_enabled", false)
+
+    /**
+     * Liga/desliga a VPN local que troca a DNS do sistema para 1.1.1.1/8.8.8.8
+     * (DnsVpnService). Ligar pode disparar o diálogo de permissão de VPN do
+     * Android — por isso o resultado real chega depois, via onDnsFixResult no
+     * JS, e não como retorno direto desta chamada.
+     */
+    @JavascriptInterface
+    fun setDnsFixEnabled(enabled: Boolean) {
+        activity.runOnUiThread {
+            if (enabled) activity.ativarCorrecaoDns() else activity.desativarCorrecaoDns()
+        }
+    }
+
+    /** Servidor de DNS preferido pelo cliente — o outro vira só o fallback. */
+    @JavascriptInterface
+    fun getDnsPrimary(): String = prefs.getString("dns_primary", "1.1.1.1") ?: "1.1.1.1"
+
+    @JavascriptInterface
+    fun setDnsPrimary(server: String) {
+        val valido = if (server == "8.8.8.8") "8.8.8.8" else "1.1.1.1"
+        prefs.edit().putString("dns_primary", valido).apply()
     }
 
     @JavascriptInterface

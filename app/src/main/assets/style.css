@@ -1556,13 +1556,15 @@ body {
 }
 
 .cfg-painel { display: none; }
-.cfg-painel.active { display: block; }
+/* flex + gap: espaça o título e os cartões de forma uniforme. Painéis com um
+   cartão só (Player, Adulto...) ficam iguais a antes; painéis com mais de um
+   (VPN: correção de DNS + servidor) deixam de vir colados um no outro. */
+.cfg-painel.active { display: flex; flex-direction: column; gap: 20px; }
 
 .cfg-painel-titulo {
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 20px;
     font-size: 22px;
     font-weight: 700;
     color: #fff;
@@ -2488,14 +2490,28 @@ body {
     gap: 5px;
 }
 
+/* Grid de 6 colunas fluidas — não largura fixa em px — para a grade esticar
+   e ocupar a mesma largura do campo de busca acima (width: 100%). Com largura
+   fixa, 6 teclas pequenas ficavam bem mais estreitas que o campo, sobrando um
+   vão vazio à direita que não existe na tela de referência. Bônus: a linha do
+   "0" sozinho ocupa só a 1ª coluna do grid, do mesmo tamanho das outras
+   teclas, sem esticar para preencher a linha toda. */
 .sk-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
     gap: 5px;
 }
 
+/* A linha de ações (backspace/limpar/espaço) tem proporções próprias — cada
+   uma "pesa" diferente (flex-grow), não são 6 células iguais — então volta a
+   ser flex, não grid. */
+.sk-row.action-row {
+    display: flex;
+}
+
 .sk-key {
-    width: 46px;
-    height: 38px;
+    width: auto;
+    height: 46px;
     background-color: #16161a;
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 6px;
@@ -2916,14 +2932,14 @@ body {
 }
 
 .home-row .vod-item {
-    flex: 0 0 170px;
-    width: 170px;
-    height: 255px;
+    flex: 0 0 188px;
+    width: 188px;
+    height: 282px;
     padding-top: 0;
 }
 
 .home-row .vod-item-title {
-    font-size: 14px;
+    font-size: 15px;
     padding: 16px 8px 8px;
 }
 
@@ -3104,6 +3120,8 @@ body {
 /* Cards de logo na seção "Escolha seu Streaming" */
 .streaming-row {
     flex-wrap: nowrap;
+    /* Respiro entre os cards, não dentro deles. */
+    gap: 20px;
 }
 
 .streaming-row::after {
@@ -3114,8 +3132,16 @@ body {
     flex: 1 1 0;
     width: auto;
     min-width: 0;
-    max-width: 235px;
-    height: 88px;
+    max-width: 258px;
+    /* aspect-ratio, não height fixo: com 8 logos disputando o mesmo espaço
+       (flex-grow), a largura real de cada card é bem menor que max-width —
+       um height em px fixo ficava "alto demais" pra essa largura real, e o
+       cover cortava as laterais pra cobrir essa altura desproporcional (foi
+       isso que cortou o N/X do Netflix e o + da Apple TV+). Com aspect-ratio
+       a altura sempre acompanha a largura real, qualquer que ela seja.
+       1.78 é a proporção real da maioria das artes (Netflix, Apple TV+,
+       Disney+, Globoplay); só Paramount+ (quase quadrada) sofre corte visível. */
+    aspect-ratio: 1.78;
 }
 
 .streaming-logo-card {
@@ -3138,6 +3164,10 @@ body {
 .streaming-logo-card img {
     width: 100%;
     height: 100%;
+    /* cover: preenche o card inteiro, igual nas 8 logos — sem faixa vazia
+       sobrando de nenhum lado. Como a proporção do card agora é próxima da
+       proporção real das artes, o corte é só a margem de fundo ao redor do
+       logo (mais perceptível só no Paramount+, que é quase quadrado). */
     object-fit: cover;
 }
 
