@@ -209,6 +209,10 @@ class MainActivity : ComponentActivity() {
             keepScreenOn = true
             setShowNextButton(false)
             setShowPreviousButton(false)
+            // O frame interno do PlayerView é transparente nas faixas de
+            // letterbox quando o vídeo não preenche a tela toda — sem isto,
+            // aparece o fundo colorido da página do WebView por baixo.
+            setBackgroundColor(android.graphics.Color.BLACK)
         }
 
         val root = FrameLayout(this).apply {
@@ -316,13 +320,25 @@ class MainActivity : ComponentActivity() {
                 override fun onPlayerError(error: PlaybackException) {
                     android.util.Log.w("MainActivity", "Erro no player nativo (VOD)", error)
                     notificarErroVideoNativo(error.message ?: "Falha ao reproduzir")
+                    pararVideoNativo()
                 }
             })
 
             exoPlayer = player
             playerView.player = player
             playerView.visibility = View.VISIBLE
-            playerView.requestFocus()
+            // Só tirar o foco da WebView uma vez não bastava: quando o
+            // controller do PlayerView some sozinho (timeout), ele perde a
+            // condição de foco e o Android devolve o foco de teclado pra
+            // WebView — o próximo OK reativava o "Assistir" em foco na
+            // página e recomeçava o vídeo do zero. Desligar isFocusable da
+            // WebView enquanto o player estiver visível garante que o D-pad
+            // nunca mais volte pra ela, não importa o que o controller do
+            // ExoPlayer faça.
+            webView.isFocusable = false
+            webView.isFocusableInTouchMode = false
+            webView.clearFocus()
+            playerView.post { playerView.requestFocus() }
 
             player.setMediaItem(MediaItem.fromUri(url))
             player.prepare()
@@ -337,8 +353,14 @@ class MainActivity : ComponentActivity() {
     /** Chamado pela ponte JS e sempre que o app sai de cena. */
     fun pararVideoNativo() {
         if (::playerView.isInitialized) {
+            val estavaVisivel = playerView.visibility == View.VISIBLE
             playerView.player = null
             playerView.visibility = View.GONE
+            if (estavaVisivel) {
+                webView.isFocusable = true
+                webView.isFocusableInTouchMode = true
+                webView.requestFocus()
+            }
         }
         try {
             exoPlayer?.release()

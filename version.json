@@ -1,6 +1,6 @@
 {
-  "version": "1.0.5.2",
+  "version": "1.0.5.3",
   "date": "2026-07-24",
-  "notes": "Corrige a tela travar (app vivo, sem nada visível) ao pedir a permissão de VPN (Config > VPN) em alguns Android TV — o diálogo do sistema fechava a tela do app e não voltava sozinho. Agora recupera automaticamente em menos de 1 segundo, sem precisar forçar parar o app.",
-  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.5.2/app-release.apk"
+  "notes": "Corrige o player de vídeo (VOD): o controle de play/pausa/avançar do ExoPlayer podia reiniciar o vídeo do zero depois de um tempo parado; agora fica estável. Quando dava erro ao reproduzir (ex.: um formato não suportado pelo aparelho), o player travava preto na tela — agora fecha sozinho e volta pro filme. Removido o fundo colorido atrás do vídeo e atrás da tela de detalhes do filme/série, que ficavam com um véu colorido em vez de preto.",
+  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.5.3/app-release.apk"
 }

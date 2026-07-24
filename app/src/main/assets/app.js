@@ -2491,12 +2491,6 @@ function openVodModal(item, isSeries) {
         if (loader) loader.style.display = 'none';
 
         if (tmdb) {
-            // Backdrop in background
-            if (tmdb.backdropUrl && backdrop) {
-                backdrop.style.backgroundImage = `url('${tmdb.backdropUrl}')`;
-                backdrop.style.transition = 'opacity 0.8s ease';
-                backdrop.style.opacity = '1';
-            }
             // Poster oficial na esquerda (sem crop)
             if (poster) {
                 poster.src = tmdb.posterUrl || (isSeries ? (item.cover || '') : (item.streamIcon || ''));
@@ -2763,11 +2757,6 @@ function abrirSeriesDetailScreen(item) {
         if (loader) loader.style.display = 'none';
 
         if (tmdb) {
-            if (tmdb.backdropUrl && backdrop) {
-                backdrop.style.backgroundImage = `url('${tmdb.backdropUrl}')`;
-                backdrop.style.transition = 'opacity 0.8s ease';
-                backdrop.style.opacity = '1';
-            }
             if (poster) poster.src = tmdb.posterUrl || item.cover || '';
             if (tmdb.logoUrl && logoEl) {
                 logoEl.src = tmdb.logoUrl;
