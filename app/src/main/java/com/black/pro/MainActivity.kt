@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -36,17 +38,74 @@ class MainActivity : ComponentActivity() {
     private lateinit var viewModel: IPTVViewModel
     private var exoPlayer: ExoPlayer? = null
 
+    private var activityVisivel = false
+    private val watchdogHandler = Handler(Looper.getMainLooper())
+    private var watchdogRunnable: Runnable? = null
+
     // Precisa ser registrado antes da Activity chegar em STARTED — por isso é
     // campo de classe, e não algo criado sob demanda dentro de onCreate.
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        pararWatchdogVpn()
         if (result.resultCode == RESULT_OK) {
             iniciarServicoDns()
         } else {
             // Usuário recusou a permissão de VPN nas configurações do sistema
             notificarResultadoDns(false)
         }
+    }
+
+    /**
+     * Em alguns Android TV (confirmado num emulador Android 16/API 36), o
+     * diálogo do sistema (com.android.vpndialogs) é iniciado com sucesso mas
+     * nunca fica genuinamente visível — a task do app é fechada pelo
+     * WindowManager e, como o diálogo é transparente, não sobra nada
+     * desenhado: a tela fica presa (app vivo, sem nada na tela) e, pior, o
+     * diálogo nunca é dispensado pelo usuário porque ele não aparece — então
+     * o callback de vpnPermissionLauncher acima também nunca dispara.
+     *
+     * Sem depender desse callback (que pode nunca vir), este watchdog checa
+     * periodicamente se a Activity voltou a ficar visível sozinha; se não,
+     * força ela de volta ao topo. Pára assim que ficar visível ou depois de
+     * um número máximo de tentativas.
+     */
+    private fun iniciarWatchdogVpn() {
+        pararWatchdogVpn()
+        var tentativas = 0
+        val runnable = object : Runnable {
+            override fun run() {
+                tentativas++
+                if (activityVisivel || tentativas > 6) return
+                android.util.Log.w("MainActivity", "Tela presa após diálogo de VPN — forçando Activity de volta (tentativa $tentativas)")
+                try {
+                    startActivity(Intent(this@MainActivity, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    })
+                } catch (e: Exception) {
+                    android.util.Log.w("MainActivity", "Falha ao forçar Activity de volta", e)
+                }
+                watchdogHandler.postDelayed(this, 700)
+            }
+        }
+        watchdogRunnable = runnable
+        watchdogHandler.postDelayed(runnable, 700)
+    }
+
+    private fun pararWatchdogVpn() {
+        watchdogRunnable?.let { watchdogHandler.removeCallbacks(it) }
+        watchdogRunnable = null
+    }
+
+    override fun onResume() {
+        super.onResume()
+        activityVisivel = true
+        pararWatchdogVpn()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        activityVisivel = false
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -180,6 +239,7 @@ class MainActivity : ComponentActivity() {
         try {
             val intent = VpnService.prepare(this)
             if (intent != null) {
+                iniciarWatchdogVpn()
                 vpnPermissionLauncher.launch(intent)
             } else {
                 iniciarServicoDns()
@@ -373,6 +433,11 @@ class MainActivity : ComponentActivity() {
             )
         } catch (_: Exception) {
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        pararWatchdogVpn()
     }
 
     override fun onUserLeaveHint() {

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.5.1",
+  "version": "1.0.5.2",
   "date": "2026-07-24",
-  "notes": "Corrige o player nativo (ExoPlayer, versão 1.0.5) ficar preso na tela ao apertar Voltar — o próprio player capturava a tecla pra só esconder os controles dele, sem fechar. Também adiciona um aviso na tela ao pedir a permissão de VPN (Config > VPN), pra ajudar a identificar onde trava quando não aparece nada.",
-  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.5.1/app-release.apk"
+  "notes": "Corrige a tela travar (app vivo, sem nada visível) ao pedir a permissão de VPN (Config > VPN) em alguns Android TV — o diálogo do sistema fechava a tela do app e não voltava sozinho. Agora recupera automaticamente em menos de 1 segundo, sem precisar forçar parar o app.",
+  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.5.2/app-release.apk"
 }
