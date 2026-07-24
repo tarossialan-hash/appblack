@@ -28,3 +28,10 @@ webplayer/node_modules/
 
 # Saída/cache do skill /graphify (não é código do app)
 graphify-out/
+
+# Keystore de release e credenciais — NUNCA versionar. Perder isto não é
+# grave, é irrecuperável: é a única chave que assina atualizações do app já
+# publicado; sem ela, não dá pra atualizar o mesmo app na Play Store de novo.
+*.jks
+*.keystore
+keystore.properties

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.4",
+  "version": "1.0.4.1",
   "date": "2026-07-24",
-  "notes": "Correção de DNS (Config > VPN, 1.1.1.1/8.8.8.8) para quando capas e informações do TMDB não carregam por bloqueio da operadora, filme/episódio 4K com imagem partida ao meio corrigido, tempo pra favoritar canal segurando OK reduzido, teclado da busca e cards de streaming/filmes novos redesenhados, botão Atualizar App abre direto na aba certa.",
-  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.4/app-release.apk"
+  "notes": "Correção crítica: ativar a correção de DNS (Config > VPN) fechava o app em alguns aparelhos TV box sem o componente de sistema pra permissão de VPN — agora falha de forma segura, sem fechar o app.",
+  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.4.1/app-release.apk"
 }

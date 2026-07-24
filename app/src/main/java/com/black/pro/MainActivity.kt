@@ -143,16 +143,31 @@ class MainActivity : ComponentActivity() {
      * Chamado pela ponte JS (Config > Rede) e na retomada automática acima.
      */
     fun ativarCorrecaoDns() {
-        val intent = VpnService.prepare(this)
-        if (intent != null) {
-            vpnPermissionLauncher.launch(intent)
-        } else {
-            iniciarServicoDns()
+        try {
+            val intent = VpnService.prepare(this)
+            if (intent != null) {
+                vpnPermissionLauncher.launch(intent)
+            } else {
+                iniciarServicoDns()
+            }
+        } catch (e: Exception) {
+            // Alguns TV boxes (firmware Android incompleto/genérico) não têm
+            // o componente de sistema que mostra o diálogo de permissão de
+            // VPN — prepare()/launch() lança ActivityNotFoundException nesses
+            // aparelhos. Sem este catch, a exceção não tratada derrubava o
+            // app inteiro (rodava dentro de runOnUiThread, chamado pela ponte
+            // JS) — o cliente via só o app fechando sozinho ao tentar ativar.
+            android.util.Log.w("MainActivity", "VPN de DNS indisponível neste aparelho", e)
+            notificarResultadoDns(false)
         }
     }
 
     fun desativarCorrecaoDns() {
-        startService(Intent(this, DnsVpnService::class.java).setAction(DnsVpnService.ACTION_STOP))
+        try {
+            startService(Intent(this, DnsVpnService::class.java).setAction(DnsVpnService.ACTION_STOP))
+        } catch (e: Exception) {
+            android.util.Log.w("MainActivity", "Falha ao parar a VPN de DNS", e)
+        }
         getSharedPreferences("black_app_prefs", Context.MODE_PRIVATE)
             .edit().putBoolean("dns_fix_enabled", false).apply()
         notificarResultadoDns(false)

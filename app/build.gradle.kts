@@ -1,6 +1,19 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.ksp)
+}
+
+// Credenciais da keystore de release — nunca no build.gradle.kts nem no git,
+// só neste arquivo local (ignorado pelo .gitignore). Sem ele, o build de
+// release cai pra assinatura de debug (dá pra compilar localmente, mas esse
+// APK/AAB não serve pra publicar/atualizar o app na Play Store).
+val keystorePropertiesFile = file("keystore.properties")
+val temKeystoreDeRelease = keystorePropertiesFile.exists()
+val keystoreProperties = Properties().apply {
+    if (temKeystoreDeRelease) load(FileInputStream(keystorePropertiesFile))
 }
 
 kotlin {
@@ -21,14 +34,25 @@ android {
         applicationId = "com.black.pro"
         minSdk = 24
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.0.4"
+        versionCode = 8
+        versionName = "1.0.4.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Otimização para TV: Focar apenas em arquiteturas ARM (maioria das TVs)
         ndk {
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
+        }
+    }
+
+    signingConfigs {
+        if (temKeystoreDeRelease) {
+            create("release") {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
         }
     }
 
@@ -40,10 +64,16 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            
-            // Usamos a configuração de assinatura de debug para que o APK seja instalável na TV
-            // sem a necessidade de criar uma chave oficial agora.
-            signingConfig = signingConfigs.getByName("debug")
+
+            // Com a keystore.properties (local, fora do git) usa a chave de
+            // release de verdade — obrigatória pra publicar/atualizar na Play
+            // Store. Sem ela (ex.: outra máquina sem o arquivo), cai pra
+            // debug só pra não travar o build local.
+            signingConfig = if (temKeystoreDeRelease) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
