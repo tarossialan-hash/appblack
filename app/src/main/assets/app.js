@@ -507,6 +507,17 @@ function onBannerItemsLoaded(jsonString) {
         return true;
     });
 
+    // Só entra no carrossel quem tem informação completa — sinopse, ano e
+    // logo. Título sem sinopse (comum quando o TMDB não achou boa
+    // correspondência) ficava com o card visivelmente vazio no meio do
+    // rodízio; melhor pular do que mostrar incompleto.
+    items = items.filter(item => {
+        const temSinopse = item.overview && item.overview.trim().length > 10;
+        const temAno = !!(item.releaseYear || item.releaseDate);
+        const temLogo = !!item.logoUrl;
+        return temSinopse && temAno && temLogo;
+    });
+
     if (items.length === 0) return;
 
     const container = document.getElementById('dynamic-hero-banner');
@@ -1338,9 +1349,20 @@ function mostrarAcaoUpdate(dados) {
         btnInstalar.onclick = iniciarInstalacaoUpdate;
         btnInstalar.style.display = 'flex';
     } else if (!temInstalador) {
-        // Web: recarregar traz a versão nova do servidor
+        // Web: recarregar traz a versão nova do servidor. location.reload(true)
+        // não força mais nada nos navegadores atuais (parâmetro ignorado) — o
+        // cache-buster na URL é o que realmente garante buscar os arquivos
+        // novos. Também grava a versão remota: sem instalação de verdade pra
+        // consultar depois, é assim que "versão instalada" passa a bater com
+        // a nova ao reabrir (ver web-bridge.js:getAppVersion).
+        const versaoRemota = dados.version;
+        btnInstalar.onclick = () => {
+            // Mesma chave que o WebBridge já sabia ler (wb_simulated_version) —
+            // só faltava alguém escrever nela e o construtor parar de apagar.
+            if (versaoRemota) localStorage.setItem('wb_simulated_version', versaoRemota);
+            location.href = location.pathname + '?atualizado=' + Date.now();
+        };
         if (txt) txt.textContent = 'Atualizar agora';
-        btnInstalar.onclick = () => location.reload(true);
         btnInstalar.style.display = 'flex';
     }
     // APK sem apkUrl no version.json: fica só o aviso, sem botão
@@ -2027,6 +2049,17 @@ function playFullscreenVideo(streamUrl, title) {
             fsPlayer.load();
         } catch (e) {}
 
+        // Cobre o player até o primeiro frame de verdade chegar — sem isto
+        // o WebView mostrava por um instante o play gigante/fundo branco
+        // padrão do <video> nativo antes do stream começar a decodificar.
+        const fsLoader = document.getElementById('fs-player-loader');
+        if (fsLoader) {
+            fsLoader.style.display = 'flex';
+            const esconderLoader = () => { fsLoader.style.display = 'none'; };
+            fsPlayer.addEventListener('playing', esconderLoader, { once: true });
+            fsPlayer.addEventListener('error', esconderLoader, { once: true });
+        }
+
         fsContainer.style.display = 'block';
         fsPlayer.src = streamUrl;
         fsPlayer.play().catch(e => console.log('Autoplay bloqueado:', e));
@@ -2698,7 +2731,27 @@ function onVodCategoriesLoaded(jsonString) {
     // Cache global para categorias VOD
     if (!window._vodCache) window._vodCache = {};
     window._currentVodType = 'vod';
-    
+
+    const itemFavoritosVod = document.createElement('div');
+    itemFavoritosVod.className = 'live-category-item categoria-favoritos';
+    itemFavoritosVod.tabIndex = 0;
+    itemFavoritosVod.innerText = 'FAVORITOS';
+    itemFavoritosVod.onclick = () => {
+        document.querySelectorAll('#vod-categories-list .live-category-item, #vod-categories-list .favorites-category-item').forEach(el => el.classList.remove('active'));
+        itemFavoritosVod.classList.add('active');
+        const grid = document.getElementById('vod-items-grid');
+        grid.innerHTML = '<div style="grid-column: 1 / -1; display:flex; justify-content:center; align-items:center; min-height:300px;"><div class="spinner" style="--spinner-size:46px;"></div></div>';
+        if (window.AndroidApp && window.AndroidApp.getFavoriteMovies) {
+            window.AndroidApp.getFavoriteMovies();
+        } else {
+            onVodListLoaded('[]', true);
+        }
+    };
+    itemFavoritosVod.onkeydown = (e) => {
+        if (e.key === "Enter") { e.preventDefault(); itemFavoritosVod.click(); }
+    };
+    container.appendChild(itemFavoritosVod);
+
     categories.forEach(cat => {
         const div = document.createElement('div');
         div.className = 'live-category-item';
@@ -2743,7 +2796,7 @@ function onVodCategoriesLoaded(jsonString) {
     
     if (categories.length > 0) {
         setTimeout(() => {
-            const firstCat = container.querySelector('.live-category-item');
+            const firstCat = container.querySelector('.live-category-item:not(.categoria-favoritos)');
             if (firstCat) {
                 firstCat.focus({ preventScroll: true });
                 firstCat.click();
@@ -2852,7 +2905,27 @@ function onSeriesCategoriesLoaded(jsonString) {
     // Cache global para categorias de Séries
     if (!window._seriesCache) window._seriesCache = {};
     window._currentVodType = 'series';
-    
+
+    const itemFavoritosSeries = document.createElement('div');
+    itemFavoritosSeries.className = 'live-category-item categoria-favoritos';
+    itemFavoritosSeries.tabIndex = 0;
+    itemFavoritosSeries.innerText = 'FAVORITOS';
+    itemFavoritosSeries.onclick = () => {
+        document.querySelectorAll('#vod-categories-list .live-category-item, #vod-categories-list .favorites-category-item').forEach(el => el.classList.remove('active'));
+        itemFavoritosSeries.classList.add('active');
+        const grid = document.getElementById('vod-items-grid');
+        grid.innerHTML = '<div style="grid-column: 1 / -1; display:flex; justify-content:center; align-items:center; min-height:300px;"><div class="spinner" style="--spinner-size:46px;"></div></div>';
+        if (window.AndroidApp && window.AndroidApp.getFavoriteSeries) {
+            window.AndroidApp.getFavoriteSeries();
+        } else {
+            onSeriesListLoaded('[]', true);
+        }
+    };
+    itemFavoritosSeries.onkeydown = (e) => {
+        if (e.key === "Enter") { e.preventDefault(); itemFavoritosSeries.click(); }
+    };
+    container.appendChild(itemFavoritosSeries);
+
     categories.forEach(cat => {
         const div = document.createElement('div');
         div.className = 'live-category-item';
@@ -2894,7 +2967,7 @@ function onSeriesCategoriesLoaded(jsonString) {
     
     if (categories.length > 0) {
         setTimeout(() => {
-            const firstCat = container.querySelector('.live-category-item');
+            const firstCat = container.querySelector('.live-category-item:not(.categoria-favoritos)');
             if (firstCat) {
                 firstCat.focus({ preventScroll: true });
                 firstCat.click();
@@ -3031,6 +3104,8 @@ document.addEventListener('keydown', function(e) {
         const isVodVisible = vodScreen && window.getComputedStyle(vodScreen).display !== 'none';
         const seriesScreen = document.getElementById('series-detail-screen');
         const isSeriesVisible = seriesScreen && window.getComputedStyle(seriesScreen).display !== 'none';
+        const searchScreenNav = document.getElementById('search-tv-screen');
+        const isSearchVisible = searchScreenNav && window.getComputedStyle(searchScreenNav).display !== 'none';
         const telaCfg = document.getElementById('settings-screen');
         const cfgVisivel = telaCfg && telaCfg.style.display !== 'none';
 
@@ -3056,6 +3131,12 @@ document.addEventListener('keydown', function(e) {
             // escondidas por trás — o que tornava a navegação até os
             // episódios imprevisível.
             focusables = Array.from(seriesScreen.querySelectorAll('button, [tabindex="0"]'));
+        } else if (isSearchVisible) {
+            // Mesmo motivo da tela de série: sem isto, cada tecla no teclado
+            // virtual (ou seta entre os cards de resultado) varria o
+            // documento inteiro — com o teclado (30+ teclas) mais a grade de
+            // resultados, era o mais pesado de todos os fallbacks genéricos.
+            focusables = Array.from(searchScreenNav.querySelectorAll('input, button, [tabindex="0"]'));
         } else {
             focusables = Array.from(document.querySelectorAll('input, button, [tabindex="0"]'));
         }
@@ -3969,7 +4050,12 @@ function closeFullscreenPlayer() {
     fsPlayer.pause();
     fsPlayer.src = '';
     fsContainer.style.display = 'none';
-    
+
+    // Se o usuário saiu antes do 'playing' disparar, o loader nunca foi
+    // escondido — trava aberto pra próxima vez que abrir o player.
+    const fsLoader = document.getElementById('fs-player-loader');
+    if (fsLoader) fsLoader.style.display = 'none';
+
     // Restaura o canal do mini-player — mas SÓ se ainda estivermos na TV ao
     // vivo. Sem esta checagem, fechar um filme em Filmes/Séries encontrava o
     // canal ainda marcado como ativo de uma visita anterior e religava o

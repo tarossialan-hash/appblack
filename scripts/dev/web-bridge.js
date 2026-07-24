@@ -6,11 +6,12 @@ class WebBridge {
         this.movies = null;
         this.series = null;
         this.searchDataPromise = null;
-        // Versão do webplayer = versão do código servido. "Atualizar" no web é
-        // o deploy de um código novo no servidor; ao recarregar, o usuário pega
-        // esta versão. Bumpar aqui é o equivalente web ao "lançar" uma versão.
-        localStorage.removeItem('wb_simulated_version');
-        this.simulatedVersion = "1.0.2";
+        // Versão do webplayer = versão do código servido. "Atualizar agora" (em
+        // mostrarAcaoUpdate, app.js) grava aqui a versão que acabou de detectar
+        // no version.json antes de recarregar — sem isso, "versão instalada"
+        // nunca mudava no teste web, porque não existe um APK de verdade pra
+        // consultar. Sem valor gravado ainda, cai no padrão abaixo.
+        this.simulatedVersion = localStorage.getItem('wb_simulated_version') || "1.0.2";
 
         // Se já tiver credenciais salvas, começa a buscar em segundo plano
         if (this.serverUrl && this.username && this.password) {
@@ -595,6 +596,30 @@ class WebBridge {
 
         if (typeof onLiveChannelsLoaded === 'function') {
             onLiveChannelsLoaded(JSON.stringify(canais));
+        }
+    }
+
+    /** Mesmo formato de getVodList, para reusar o onVodListLoaded. */
+    getFavoriteMovies() {
+        const filmes = this._favoritos()
+            .filter(f => f.tipo === 'movie')
+            .sort((a, b) => String(a.titulo).localeCompare(String(b.titulo), 'pt-BR'))
+            .map(f => ({ streamId: f.id, name: f.titulo, streamIcon: f.posterPath || '', rating: '', containerExtension: 'mp4' }));
+
+        if (typeof onVodListLoaded === 'function') {
+            onVodListLoaded(JSON.stringify(filmes), true);
+        }
+    }
+
+    /** Mesmo formato de getSeriesList, para reusar o onSeriesListLoaded. */
+    getFavoriteSeries() {
+        const series = this._favoritos()
+            .filter(f => f.tipo === 'series')
+            .sort((a, b) => String(a.titulo).localeCompare(String(b.titulo), 'pt-BR'))
+            .map(f => ({ seriesId: f.id, name: f.titulo, cover: f.posterPath || '', rating: '' }));
+
+        if (typeof onSeriesListLoaded === 'function') {
+            onSeriesListLoaded(JSON.stringify(series), true);
         }
     }
 }

@@ -21,8 +21,8 @@ android {
         applicationId = "com.black.pro"
         minSdk = 24
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.0.3.1"
+        versionCode = 6
+        versionName = "1.0.3.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

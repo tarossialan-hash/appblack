@@ -1,6 +1,6 @@
 {
-  "version": "1.0.3.1",
+  "version": "1.0.3.2",
   "date": "2026-07-24",
-  "notes": "Correção da navegação por seta na tela de série, faixa visível no degradê do herói corrigida, card de atualização mais explicativo.",
-  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.3.1/app-release.apk"
+  "notes": "Categoria Favoritos em Filmes e Séries, tela branca com play gigante corrigida (loader no início do vídeo), corte de imagem no destaque das séries ajustado, navegação da busca mais fluida, botão Atualizar com foco visual corrigido, carrossel da home só exibe itens com sinopse, ano e logo completos.",
+  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.3.2/app-release.apk"
 }

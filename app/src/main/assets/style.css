@@ -475,6 +475,17 @@ body {
     box-shadow: 0 4px 10px rgba(255,255,255,0.25);
 }
 
+/* #nav-update-btn é laranja (inline, de propósito — selo de destaque), mas
+   herdava o box-shadow branco genérico acima: o halo branco por trás de um
+   botão laranja é a mistura estranha. Sombra própria, na mesma cor. */
+#nav-update-btn:hover,
+#nav-update-btn:focus {
+    outline: none;
+    transform: scale(1.02);
+    box-shadow: 0 4px 14px rgba(243, 156, 18, 0.45);
+    background: rgba(243, 156, 18, 0.22) !important;
+}
+
 .action-btn .icon {
     width: 16px;
     height: 16px;
@@ -3355,7 +3366,10 @@ body {
        faixa horizontal em painel de TV real. 100% elimina a costura. */
     height: 100%;
     background-size: cover;
-    background-position: right top;
+    /* "right top" cortava a cabeça em imagens mais verticais — a caixa é bem
+       mais larga que alta, então o cover zoomava e empurrava o enquadramento
+       pra cima demais. Centralizado verticalmente evita cortar o rosto. */
+    background-position: right center;
     transition: background-image 0.4s ease;
     z-index: 0;
 }
@@ -3380,21 +3394,23 @@ body {
        dois é o que evita a costura. */
     height: 100%;
     /* Horizontal fade: solid black up to 32% to cover the image's left edge at 30%, then smooth fade */
-    /* Vertical fade: preto sólido cresce gradualmente até virar 100% preto
-       bem antes do fim da caixa, então o restante (onde fica o conteúdo
-       rolável) é preto uniforme sem nenhuma transição a mais acontecendo. */
+    /* Antes o preto só ficava totalmente transparente na beirada direita
+       (100%) — a imagem inteira ficava lavada por baixo de uma camada
+       escura. Agora clareia bem mais cedo (68% da largura), então o canto
+       direito mostra a imagem nítida, sem véu — só o texto à esquerda
+       precisa do preto sólido. Vertical igual: clareia bem antes do topo. */
     background:
         linear-gradient(to right,
             #000 0%,
-            #000 32%,
-            rgba(0,0,0,0.85) 45%,
-            rgba(0,0,0,0.4) 65%,
-            transparent 100%),
+            #000 28%,
+            rgba(0,0,0,0.7) 38%,
+            rgba(0,0,0,0.15) 55%,
+            transparent 68%),
         linear-gradient(to top,
             #000 0%,
-            #000 55%,
-            rgba(0,0,0,0.6) 68%,
-            transparent 100%);
+            #000 50%,
+            rgba(0,0,0,0.2) 62%,
+            transparent 75%);
     z-index: 1;
 }
 

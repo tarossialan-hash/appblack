@@ -739,6 +739,62 @@ class WebAppInterface(
         }
     }
 
+    /**
+     * Filmes favoritos, no formato de getVodList — a categoria FAVORITOS em
+     * Filmes reaproveita o onVodListLoaded que já existe. Segundo argumento
+     * true = fromCache, pra não sobrescrever o cache da categoria normal que
+     * estiver aberta (_pendingCacheKey pode ser de outra categoria).
+     */
+    @JavascriptInterface
+    fun getFavoriteMovies() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val jsonArray = JSONArray()
+            try {
+                FavoritosManager.getByTipo(activity.applicationContext, "movie")
+                    .sortedBy { it.titulo.trim().lowercase() }
+                    .forEach { fav ->
+                        val obj = JSONObject()
+                        obj.put("streamId", fav.id)
+                        obj.put("name", fav.titulo)
+                        obj.put("streamIcon", fav.posterPath ?: "")
+                        obj.put("rating", "")
+                        obj.put("containerExtension", "mp4")
+                        jsonArray.put(obj)
+                    }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            withContext(Dispatchers.Main) {
+                webView.evaluateJavascript("javascript:onVodListLoaded('${escapeJs(jsonArray.toString())}', true)", null)
+            }
+        }
+    }
+
+    /** Mesma ideia de getFavoriteMovies, para a aba Séries. */
+    @JavascriptInterface
+    fun getFavoriteSeries() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val jsonArray = JSONArray()
+            try {
+                FavoritosManager.getByTipo(activity.applicationContext, "series")
+                    .sortedBy { it.titulo.trim().lowercase() }
+                    .forEach { fav ->
+                        val obj = JSONObject()
+                        obj.put("seriesId", fav.id)
+                        obj.put("name", fav.titulo)
+                        obj.put("cover", fav.posterPath ?: "")
+                        obj.put("rating", "")
+                        jsonArray.put(obj)
+                    }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            withContext(Dispatchers.Main) {
+                webView.evaluateJavascript("javascript:onSeriesListLoaded('${escapeJs(jsonArray.toString())}', true)", null)
+            }
+        }
+    }
+
     @JavascriptInterface
     fun logout() {
         // Desconecta o acesso: limpa a sessão criptografada (usuário/senha) no dispositivo
