@@ -157,6 +157,8 @@ function onLoginSuccess(username) {
         const savedCat = localStorage.getItem('current_category') || 'inicio';
         const savedBtn = Array.from(document.querySelectorAll('.nav-item')).find(el => el.getAttribute('onclick') && el.getAttribute('onclick').includes(`'${savedCat}'`)) || document.querySelector('.nav-item');
         mostrarCategoria(savedBtn, savedCat);
+        // Checagem automática, uma vez por sessão — não trava nem atrasa a home.
+        verificarAtualizacaoAutomatica();
     } else {
         const syncScreen = document.getElementById("sync-screen");
         syncScreen.style.display = "flex";
@@ -310,7 +312,9 @@ function buscar() {
     document.querySelector('.home-scroll-area').style.display = 'none';
     document.getElementById('live-tv-screen').style.display = 'none';
     document.getElementById('vod-tv-screen').style.display = 'none';
-    
+    const providerScreenAtivo = document.getElementById('provider-screen');
+    if (providerScreenAtivo) providerScreenAtivo.style.display = 'none';
+
     // Desmarca os botões da barra superior
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
@@ -546,26 +550,41 @@ function onBannerItemsLoaded(jsonString) {
     }
 
     async function initWithValidation() {
-        // Validação de todos os destaques em paralelo. Antes era um for...await:
-        // cada item só começava depois que o anterior terminasse, e o render só
-        // vinha no fim do laço — com 10 destaques eram 10 idas e voltas em fila
-        // e o banner ficava preto até a última responder. Em paralelo o tempo
-        // total passa a ser o do item mais lento, não a soma de todos.
-        const resultados = await Promise.all(items.map(async item => {
+        const promessas = items.map(async item => {
             const [backdropOk, logoOk] = await Promise.all([
                 preloadImage(item.backdropUrl),
                 preloadImage(item.logoUrl)
             ]);
             return (backdropOk && logoOk) ? item : null;
-        }));
+        });
 
-        // filter preserva a ordem original dos destaques
+        let primeiraRenderizacaoFeita = false;
+
+        // Renderiza IMEDIATAMENTE assim que QUALQUER banner terminar de baixar
+        promessas.forEach(p => {
+            p.then(result => {
+                if (result && !primeiraRenderizacaoFeita) {
+                    primeiraRenderizacaoFeita = true;
+                    items = [result]; 
+                    render(0);
+                }
+            });
+        });
+
+        const resultados = await Promise.all(promessas);
         const validItems = resultados.filter(Boolean).slice(0, 6);
+
         if (validItems.length === 0) {
-            return;
+            return; 
         }
+        
         items = validItems;
-        render(0);
+        if (primeiraRenderizacaoFeita && items.length > 1) {
+            startProgress(); 
+        } else if (!primeiraRenderizacaoFeita) {
+            render(0);
+            startProgress();
+        }
     }
 
     // Ícones de linha (Lucide-style) para a barra de metadados do banner
@@ -1178,6 +1197,21 @@ function compararVersoes(a, b) {
 // Guarda o link do APK da versão nova, entre verificar e instalar
 let _apkUpdateUrl = null;
 
+/** Busca e compara version.json — usado tanto pela checagem manual (Settings)
+ *  quanto pela automática (silenciosa, no login). Nunca toca em elementos de
+ *  UI: quem chama decide o que fazer com o resultado. */
+function buscarInfoAtualizacao() {
+    // cache-buster: o raw do GitHub cacheia por alguns minutos
+    return fetch(URL_VERSION_JSON + '?t=' + Date.now(), { cache: 'no-store' })
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(dados => {
+            const remota = String(dados.version || '').trim();
+            const local = versaoInstalada();
+            if (!remota) throw new Error('sem versão');
+            return { dados, remota, local, temUpdate: compararVersoes(remota, local) > 0 };
+        });
+}
+
 function verificarAtualizacao() {
     const status = document.getElementById('cfg-update-status');
     const btn = document.getElementById('cfg-btn-verificar');
@@ -1188,21 +1222,17 @@ function verificarAtualizacao() {
     if (btn) btn.classList.add('cfg-opcao-ocupada');
     if (btnInstalar) btnInstalar.style.display = 'none';
 
-    // cache-buster: o raw do GitHub cacheia por alguns minutos
-    fetch(URL_VERSION_JSON + '?t=' + Date.now(), { cache: 'no-store' })
-        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-        .then(dados => {
-            const remota = String(dados.version || '').trim();
-            const local = versaoInstalada();
-            if (!remota) throw new Error('sem versão');
-
-            if (compararVersoes(remota, local) > 0) {
+    buscarInfoAtualizacao()
+        .then(({ dados, remota, local, temUpdate }) => {
+            if (temUpdate) {
                 const notas = dados.notes ? ' — ' + dados.notes : '';
                 status.textContent = `Nova versão disponível: ${remota} (instalada: ${local})${notas}`;
                 avisoRapido('Atualização disponível: ' + remota);
                 mostrarAcaoUpdate(dados);
+                mostrarAvisoUpdateNoMenu(true);
             } else {
                 status.textContent = `Você está na versão mais recente (${local}).`;
+                mostrarAvisoUpdateNoMenu(false);
             }
         })
         .catch(() => {
@@ -1211,6 +1241,43 @@ function verificarAtualizacao() {
         .finally(() => {
             if (btn) btn.classList.remove('cfg-opcao-ocupada');
         });
+}
+
+/** Checagem silenciosa, disparada uma vez por sessão logo após o login/sync.
+ *  Se achar versão nova, só acende o selo "Atualizar App" na top-nav — sem
+ *  interromper o usuário com toast/modal. O clique nele abre a aba de
+ *  Configurações já pronta pra instalar. */
+function verificarAtualizacaoAutomatica() {
+    if (window._updateCheckFeito) return;
+    window._updateCheckFeito = true;
+
+    buscarInfoAtualizacao()
+        .then(({ dados, temUpdate }) => {
+            if (!temUpdate) return;
+            _apkUpdateUrl = dados.apkUrl || null;
+            mostrarAvisoUpdateNoMenu(true);
+        })
+        .catch(() => { /* checagem em segundo plano: falha silenciosa, o botão manual continua disponível */ });
+}
+
+/** Mostra/esconde o selo de atualização — na top-nav (logado) e na tela de
+ *  login (se a checagem rodar antes do usuário entrar). Cada um só existe
+ *  na tela em que faz sentido, o outro fica display:none e o toggle é inofensivo. */
+function mostrarAvisoUpdateNoMenu(visivel) {
+    const navBtn = document.getElementById('nav-update-btn');
+    if (navBtn) navBtn.style.display = visivel ? 'flex' : 'none';
+    const loginBtn = document.getElementById('login-update-btn');
+    if (loginBtn) loginBtn.style.display = visivel ? 'inline-block' : 'none';
+}
+
+/** Chamado pelo botão "Atualizar App" da top-nav (e pelo da tela de login,
+ *  quando ainda dá pra chegar nela). Não existe modal de confirmação
+ *  separado — vai direto pra aba de Configurações que já tem tudo pronto:
+ *  status, notas da versão e o botão de baixar/instalar. */
+function abrirUpdateConfirmModalDirectly() {
+    abrirConfiguracoes();
+    selecionarAbaConfig('atualizacao');
+    verificarAtualizacao();
 }
 
 /* Mostra o botão de ação certo para a plataforma:
@@ -1555,6 +1622,350 @@ async function fetchTmdbData(title, isSeries) {
     }
 }
 
+// ==========================================
+// Tela de Catálogo por Streaming (Netflix, etc.)
+// Prioriza categorias do catálogo Xtream local classificadas pelo nome do
+// streaming (ex: uma categoria chamada "NETFLIX" no painel do usuário) — assim
+// o que aparece é o que realmente toca. Sem categoria correspondente (ou fora
+// do bridge nativo), cai pro TMDB discover filtrado por watch provider.
+// ==========================================
+
+const PROVIDER_CATEGORY_ALIASES = {
+    8: ['netflix'],
+    119: ['prime video', 'amazon prime'],
+    350: ['apple tv'],
+    283: ['crunchyroll'],
+    337: ['disney'],
+    307: ['globoplay', 'globo play'],
+    1899: ['hbo max', 'hbo'],
+    531: ['paramount']
+};
+
+function normalizarTexto(s) {
+    return (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function categoriasCorrespondentes(categorias, aliases) {
+    if (!Array.isArray(categorias) || !aliases.length) return [];
+    return categorias.filter(c => {
+        const nome = normalizarTexto(c.categoryName);
+        return aliases.some(a => nome.includes(normalizarTexto(a)));
+    });
+}
+
+// Intercepta o callback global da bridge (Kotlin ou web-bridge.js) uma única
+// vez. As respostas nativas sempre chegam via window.onXxxLoaded — pra
+// reaproveitar getVodCategories/getVodList etc. sem essa tela mexer no
+// #vod-tv-screen de verdade, troca o callback temporariamente e devolve o
+// original assim que a resposta chega (ou depois de um timeout de segurança).
+function chamarBridgeUmaVez(metodoBridge, nomeCallback, ...args) {
+    return new Promise((resolve) => {
+        if (!window.AndroidApp || typeof window.AndroidApp[metodoBridge] !== 'function') {
+            resolve([]);
+            return;
+        }
+        const original = window[nomeCallback];
+        let resolvido = false;
+        const finalizar = (data) => {
+            if (resolvido) return;
+            resolvido = true;
+            window[nomeCallback] = original;
+            resolve(data);
+        };
+        window[nomeCallback] = function (jsonString) {
+            let data = [];
+            try { data = JSON.parse(jsonString); } catch (e) {}
+            finalizar(data);
+        };
+        setTimeout(() => finalizar([]), 6000);
+        try {
+            window.AndroidApp[metodoBridge](...args);
+        } catch (e) {
+            finalizar([]);
+        }
+    });
+}
+
+async function buscarCatalogoLocalPorProvedor(providerId) {
+    const aliases = PROVIDER_CATEGORY_ALIASES[providerId] || [];
+    if (!aliases.length || !window.AndroidApp) return { movies: [], series: [] };
+
+    const [vodCats, seriesCats] = await Promise.all([
+        chamarBridgeUmaVez('getVodCategories', 'onVodCategoriesLoaded'),
+        chamarBridgeUmaVez('getSeriesCategories', 'onSeriesCategoriesLoaded')
+    ]);
+
+    const vodMatch = categoriasCorrespondentes(vodCats, aliases);
+    const seriesMatch = categoriasCorrespondentes(seriesCats, aliases);
+
+    const listasFilmes = await Promise.all(vodMatch.map(c => chamarBridgeUmaVez('getVodList', 'onVodListLoaded', c.categoryId)));
+    const listasSeries = await Promise.all(seriesMatch.map(c => chamarBridgeUmaVez('getSeriesList', 'onSeriesListLoaded', c.categoryId)));
+
+    return {
+        movies: [].concat(...listasFilmes),
+        series: [].concat(...listasSeries)
+    };
+}
+
+function abrirProviderScreen(providerId, providerName, logoSrc) {
+    pararPlayerAoVivo();
+
+    document.querySelector('.home-scroll-area').style.display = 'none';
+    document.getElementById('live-tv-screen').style.display = 'none';
+    document.getElementById('vod-tv-screen').style.display = 'none';
+    const searchScreen = document.getElementById('search-tv-screen');
+    if (searchScreen) searchScreen.style.display = 'none';
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    const topNav = document.querySelector('.top-nav');
+    if (topNav) topNav.style.display = 'none';
+
+    const logoEl = document.getElementById('provider-sidebar-logo');
+    if (logoEl) { logoEl.src = logoSrc; logoEl.alt = providerName; }
+
+    const screen = document.getElementById('provider-screen');
+    if (screen) screen.style.display = 'flex';
+
+    carregarProviderCatalogo(providerId, providerName);
+}
+
+function fecharProviderScreen() {
+    const screen = document.getElementById('provider-screen');
+    if (screen) screen.style.display = 'none';
+    const inicioBtn = document.querySelector('.nav-item');
+    mostrarCategoria(inicioBtn, 'inicio');
+}
+
+let _providerHeroSeq = 0;
+let _providerHeroDebounce = null;
+
+// Item já vem do TMDB (discover) — tudo que o hero precisa já está em mãos,
+// atualiza na hora, sem round-trip extra.
+function atualizarHeroProviderTmdbRaw(tmdbItem) {
+    clearTimeout(_providerHeroDebounce);
+    _providerHeroSeq++;
+
+    const hero = document.getElementById('provider-hero-backdrop');
+    const heroTitle = document.getElementById('provider-hero-title');
+    const heroSubtitle = document.getElementById('provider-hero-subtitle');
+    const heroMeta = document.getElementById('provider-hero-meta');
+    if (!hero) return;
+
+    const backdropPath = tmdbItem.backdrop_path || tmdbItem.poster_path;
+    hero.style.backgroundImage = backdropPath ? `url('https://image.tmdb.org/t/p/w1280${backdropPath}')` : '';
+    if (heroTitle) heroTitle.textContent = tmdbItem.title || tmdbItem.name || '';
+    if (heroSubtitle) heroSubtitle.textContent = tmdbItem.overview ? tmdbItem.overview.slice(0, 170) : '';
+    if (heroMeta) {
+        const ehSerie = !tmdbItem.title;
+        const ano = (tmdbItem.release_date || tmdbItem.first_air_date || '').slice(0, 4);
+        const nota = tmdbItem.vote_average ? tmdbItem.vote_average.toFixed(1) : '';
+        heroMeta.textContent = [ehSerie ? 'Série' : 'Filme', ano, nota ? '★ ' + nota : ''].filter(Boolean).join('   ');
+    }
+}
+
+// Item local (catálogo Xtream) só tem pôster — o backdrop/sinopse vêm do
+// TMDB. Debounced: trocar de foco rápido no D-pad não pode martelar a API a
+// cada passo, só quando o usuário para numa capa por um instante.
+function atualizarHeroProviderLocal(item, isSeries) {
+    const seq = ++_providerHeroSeq;
+    clearTimeout(_providerHeroDebounce);
+
+    const heroTitle = document.getElementById('provider-hero-title');
+    if (heroTitle) heroTitle.textContent = item.name || '';
+
+    _providerHeroDebounce = setTimeout(async () => {
+        const tmdb = await fetchTmdbData(item.name, isSeries);
+        if (seq !== _providerHeroSeq || !tmdb) return; // foco já mudou de novo, ou não achou
+
+        const hero = document.getElementById('provider-hero-backdrop');
+        const heroSubtitle = document.getElementById('provider-hero-subtitle');
+        const heroMeta = document.getElementById('provider-hero-meta');
+        if (hero) hero.style.backgroundImage = tmdb.backdropUrl ? `url('${tmdb.backdropUrl}')` : '';
+        if (heroTitle) heroTitle.textContent = tmdb.title || item.name || '';
+        if (heroSubtitle) heroSubtitle.textContent = tmdb.overview || '';
+        if (heroMeta) {
+            const nota = tmdb.voteAverage || item.rating || '';
+            heroMeta.textContent = [isSeries ? 'Série' : 'Filme', tmdb.year || '', nota ? '★ ' + nota : ''].filter(Boolean).join('   ');
+        }
+    }, 280);
+}
+
+async function carregarProviderCatalogo(providerId, providerName) {
+    const hero = document.getElementById('provider-hero-backdrop');
+    const heroTitle = document.getElementById('provider-hero-title');
+    const heroSubtitle = document.getElementById('provider-hero-subtitle');
+    const heroMeta = document.getElementById('provider-hero-meta');
+    const top10Row = document.getElementById('provider-top10-row');
+    const seriesRow = document.getElementById('provider-series-row');
+
+    if (hero) hero.style.backgroundImage = '';
+    if (heroTitle) heroTitle.textContent = '';
+    if (heroSubtitle) heroSubtitle.textContent = '';
+    if (heroMeta) heroMeta.textContent = '';
+    if (top10Row) top10Row.innerHTML = '<div class="spinner" style="--spinner-size:40px;"></div>';
+    if (seriesRow) seriesRow.innerHTML = '';
+
+    let localMovies = [], localSeries = [];
+    try {
+        const local = await buscarCatalogoLocalPorProvedor(providerId);
+        localMovies = local.movies;
+        localSeries = local.series;
+    } catch (e) {
+        console.error('Erro ao buscar catálogo local do provedor', e);
+    }
+
+    let tmdbMovies = [], tmdbSeries = [];
+    const precisaTmdbFilmes = localMovies.length === 0;
+    const precisaTmdbSeries = localSeries.length === 0;
+
+    if (precisaTmdbFilmes || precisaTmdbSeries) {
+        try {
+            const [moviesRes, seriesRes] = await Promise.all([
+                precisaTmdbFilmes
+                    ? fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}&language=pt-BR&watch_region=BR&with_watch_providers=${providerId}&sort_by=popularity.desc`)
+                    : Promise.resolve(null),
+                precisaTmdbSeries
+                    ? fetch(`https://api.themoviedb.org/3/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&watch_region=BR&with_watch_providers=${providerId}&sort_by=popularity.desc`)
+                    : Promise.resolve(null)
+            ]);
+            if (moviesRes) {
+                const moviesData = await moviesRes.json();
+                tmdbMovies = (moviesData.results || []).filter(m => m.poster_path);
+            }
+            if (seriesRes) {
+                const seriesData = await seriesRes.json();
+                tmdbSeries = (seriesData.results || []).filter(s => s.poster_path);
+            }
+        } catch (e) {
+            console.error('Erro ao carregar catálogo TMDB do provedor', e);
+        }
+    }
+
+    // Destaque inicial do hero: item local (enriquecido via TMDB) tem prioridade
+    // — é o que realmente toca. Sem local, usa o primeiro resultado do TMDB puro.
+    if (localMovies[0] || localSeries[0]) {
+        const destaqueLocal = localMovies[0] || localSeries[0];
+        atualizarHeroProviderLocal(destaqueLocal, !localMovies[0]);
+    } else {
+        const destaque = tmdbMovies[0] || tmdbSeries[0];
+        if (destaque) atualizarHeroProviderTmdbRaw(destaque);
+    }
+
+    if (top10Row) {
+        top10Row.innerHTML = '';
+        if (localMovies.length) {
+            localMovies.slice(0, 8).forEach((m, i) => top10Row.appendChild(montarProviderTopItemLocal(m, i + 1)));
+        } else {
+            tmdbMovies.slice(0, 8).forEach((m, i) => top10Row.appendChild(montarProviderTopItem(m, i + 1, false)));
+        }
+    }
+
+    if (seriesRow) {
+        seriesRow.innerHTML = '';
+        if (localSeries.length) {
+            localSeries.slice(0, 12).forEach(s => seriesRow.appendChild(montarProviderPosterLocal(s)));
+        } else {
+            tmdbSeries.slice(0, 12).forEach(s => seriesRow.appendChild(montarProviderPoster(s, true)));
+        }
+    }
+
+    if (!localMovies.length && !localSeries.length && !tmdbMovies.length && !tmdbSeries.length) {
+        avisoRapido('Não foi possível carregar o catálogo de ' + providerName);
+    }
+}
+
+function montarProviderTopItem(tmdbItem, rank, isSeries) {
+    const wrap = document.createElement('div');
+    wrap.className = 'provider-top-item';
+
+    const rankEl = document.createElement('div');
+    rankEl.className = 'provider-top-rank';
+    rankEl.textContent = String(rank);
+
+    const img = document.createElement('img');
+    img.className = 'provider-top-poster';
+    img.tabIndex = 0;
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.src = tmdbItem.poster_path ? `https://image.tmdb.org/t/p/w300${tmdbItem.poster_path}` : '';
+    img.alt = tmdbItem.title || tmdbItem.name || '';
+    img.onclick = () => abrirDetalheProvider(tmdbItem, isSeries);
+    img.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); img.click(); } };
+    img.onmouseenter = () => atualizarHeroProviderTmdbRaw(tmdbItem);
+    img.onfocus = () => atualizarHeroProviderTmdbRaw(tmdbItem);
+
+    wrap.appendChild(rankEl);
+    wrap.appendChild(img);
+    return wrap;
+}
+
+function montarProviderPoster(tmdbItem, isSeries) {
+    const div = document.createElement('div');
+    div.className = 'vod-item';
+    div.tabIndex = 0;
+    div.innerHTML = tmdbItem.poster_path
+        ? `<img src="https://image.tmdb.org/t/p/w300${tmdbItem.poster_path}" class="vod-item-poster" loading="lazy" decoding="async" onerror="this.style.display='none'">`
+        : '';
+    const title = document.createElement('div');
+    title.className = 'vod-item-title';
+    title.textContent = tmdbItem.title || tmdbItem.name || '';
+    div.appendChild(title);
+    div.onclick = () => abrirDetalheProvider(tmdbItem, isSeries);
+    div.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); div.click(); } };
+    div.onmouseenter = () => atualizarHeroProviderTmdbRaw(tmdbItem);
+    div.onfocus = () => atualizarHeroProviderTmdbRaw(tmdbItem);
+    return div;
+}
+
+// Variantes "local": item real do catálogo Xtream (streamId/seriesId válido),
+// abre o modal de verdade com o botão Assistir funcionando.
+function montarProviderTopItemLocal(item, rank) {
+    const wrap = document.createElement('div');
+    wrap.className = 'provider-top-item';
+
+    const rankEl = document.createElement('div');
+    rankEl.className = 'provider-top-rank';
+    rankEl.textContent = String(rank);
+
+    const img = document.createElement('img');
+    img.className = 'provider-top-poster';
+    img.tabIndex = 0;
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.src = item.streamIcon ? otimizarCapa(item.streamIcon) : '';
+    img.alt = item.name || '';
+    img.onclick = () => openVodModal(item, false);
+    img.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); img.click(); } };
+    img.onmouseenter = () => atualizarHeroProviderLocal(item, false);
+    img.onfocus = () => atualizarHeroProviderLocal(item, false);
+
+    wrap.appendChild(rankEl);
+    wrap.appendChild(img);
+    return wrap;
+}
+
+function montarProviderPosterLocal(item) {
+    const div = document.createElement('div');
+    div.className = 'vod-item';
+    div.tabIndex = 0;
+    const iconHtml = item.cover ? `<img src="${otimizarCapa(item.cover)}" class="vod-item-poster" loading="lazy" decoding="async" onerror="this.style.display='none'">` : '';
+    div.innerHTML = `${iconHtml}<div class="vod-item-title">${item.name || ''}</div>`;
+    div.onclick = () => openVodModal(item, true);
+    div.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); div.click(); } };
+    div.onmouseenter = () => atualizarHeroProviderLocal(item, true);
+    div.onfocus = () => atualizarHeroProviderLocal(item, true);
+    return div;
+}
+
+function abrirDetalheProvider(tmdbItem, isSeries) {
+    const poster = tmdbItem.poster_path ? `https://image.tmdb.org/t/p/w500${tmdbItem.poster_path}` : '';
+    openVodModal({
+        name: tmdbItem.title || tmdbItem.name || '',
+        streamIcon: poster,
+        cover: poster,
+        rating: tmdbItem.vote_average ? tmdbItem.vote_average.toFixed(1) : ''
+    }, isSeries);
+}
+
 function playFullscreenVideo(streamUrl, title) {
     const fsContainer = document.getElementById('fs-player-container');
     const fsPlayer    = document.getElementById('fullscreen-player');
@@ -1605,64 +2016,104 @@ function playFullscreenVideo(streamUrl, title) {
     }
 }
 
+// Resolve a URL de stream de um episódio — mesma lógica usada no card e no
+// autoplay, pra nunca divergir entre os dois caminhos.
+function resolverStreamUrlEpisodio(ep) {
+    const extension = ep.containerExtension || 'mp4';
+    if (window.AndroidApp) {
+        if (window.AndroidApp.getSeriesStreamUrl) {
+            return window.AndroidApp.getSeriesStreamUrl(ep.id, extension);
+        }
+        return `http://bkpac.cc/series/${window.AndroidApp.getUsername()}/${window.AndroidApp.getPassword()}/${ep.id}.${extension}`;
+    }
+    return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+}
+
+// Toca o episódio no índice da lista da temporada atual (window._seriesAutoplayList)
+// e marca o card correspondente como ativo — usado tanto pelo clique quanto
+// pelo autoplay ao encerrar o episódio anterior.
+function tocarEpisodioDaLista(index) {
+    const lista = window._seriesAutoplayList;
+    if (!lista || !lista[index]) return;
+
+    const ep = lista[index];
+    const streamUrl = resolverStreamUrlEpisodio(ep);
+    if (!streamUrl) return;
+
+    window._seriesAutoplayIndex = index;
+    document.querySelectorAll('#series-detail-episodes-row .episode-card').forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+    });
+
+    playFullscreenVideo(streamUrl, ep.title || `Episódio ${ep.episodeNumber}`);
+}
+
 window.onSeriesInfoLoaded = function(jsonString) {
     let data = {};
     try { data = JSON.parse(jsonString); } catch(e) {}
 
-    const tabsContainer = document.getElementById('vod-detail-seasons-tabs');
-    const episodesContainer = document.getElementById('vod-detail-episodes-row');
-    const seasonTitleEl = document.getElementById('vod-detail-season-title');
-    const seriesSection = document.getElementById('vod-detail-series-section');
+    const tabsContainer = document.getElementById('series-detail-seasons-tabs');
+    const episodesContainer = document.getElementById('series-detail-episodes-row');
+    const seasonTitleEl = document.getElementById('series-detail-season-title');
 
     if (!tabsContainer || !episodesContainer) return;
     tabsContainer.innerHTML = '';
     episodesContainer.innerHTML = '';
 
+    // Setas de navegação da fileira: rolam só o carrossel (scrollTo direto no
+    // elemento), nunca a página — é isso que evita o "seletor mexendo a tela
+    // inteira". Mesmo padrão usado nas fileiras da home.
+    const prevBtn = document.getElementById('series-detail-ep-prev');
+    const nextBtn = document.getElementById('series-detail-ep-next');
+    const scrollEpisodes = (direction) => {
+        const amount = episodesContainer.clientWidth * 0.75;
+        episodesContainer.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
+    };
+    if (prevBtn) prevBtn.onclick = () => scrollEpisodes('left');
+    if (nextBtn) nextBtn.onclick = () => scrollEpisodes('right');
+
     const episodesMap = data.episodes || {};
     const seasonsKeys = Object.keys(episodesMap).sort((a,b) => parseInt(a) - parseInt(b));
 
-    if (seasonsKeys.length === 0) {
-        if (seriesSection) seriesSection.style.display = 'none';
-        return;
-    }
-
-    if (seriesSection) seriesSection.style.display = 'block';
+    if (seasonsKeys.length === 0) return;
 
     function renderSeasonEpisodes(seasonKey) {
         episodesContainer.innerHTML = '';
         if (seasonTitleEl) seasonTitleEl.textContent = `Temporada ${seasonKey}`;
 
         const episodesList = episodesMap[seasonKey] || [];
-        episodesList.forEach(ep => {
+        // Autoplay encadeia dentro desta temporada — reaponta a cada troca
+        // de aba pra sempre tocar "o próximo desta lista", não da anterior.
+        window._seriesAutoplayList = episodesList;
+        window._seriesAutoplayIndex = -1;
+
+        episodesList.forEach((ep, epIndex) => {
             const card = document.createElement('div');
             card.className = 'episode-card';
             card.tabIndex = 0;
 
             const thumbUrl = (ep.info && ep.info.movieImage) ? ep.info.movieImage : (window._vodDetailItem ? (window._vodDetailItem.cover || window._vodDetailItem.streamIcon) : '');
-            let imgHtml = thumbUrl ? `<img src="${thumbUrl}" class="episode-card-thumb" onerror="this.src='logo_black.png'">` : `<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;color:#fff;">BLACK</div>`;
+            const imgHtml = thumbUrl ? `<img src="${thumbUrl}" class="episode-card-thumb" onerror="this.src='logo_black.png'">` : `<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center;color:#fff;">BLACK</div>`;
 
             const badgeHtml = `<div class="episode-card-badge">E${ep.episodeNumber || ep.episode_num || ep.id}</div>`;
-            const titleHtml = `<div class="episode-card-info">${ep.title || `Episódio ${ep.episodeNumber}`}</div>`;
 
-            card.innerHTML = `${imgHtml}${badgeHtml}${titleHtml}`;
+            // Nem todo painel Xtream manda duração no episódio — só mostra
+            // o selo quando o dado existe de verdade.
+            const duracaoMin = ep.info && ep.info.duration ? String(ep.info.duration).match(/\d+/) : null;
+            const duracaoHtml = duracaoMin ? `<div class="episode-card-duration">${duracaoMin[0]} min</div>` : '';
 
-            card.onclick = () => {
-                let streamUrl = '';
-                const extension = ep.containerExtension || 'mp4';
-                if (window.AndroidApp) {
-                    if (window.AndroidApp.getSeriesStreamUrl) {
-                        streamUrl = window.AndroidApp.getSeriesStreamUrl(ep.id, extension);
-                    } else {
-                        streamUrl = `http://bkpac.cc/series/${window.AndroidApp.getUsername()}/${window.AndroidApp.getPassword()}/${ep.id}.${extension}`;
-                    }
-                } else {
-                    streamUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-                }
+            const tituloEpisodio = ep.title || `Episódio ${ep.episodeNumber}`;
 
-                if (streamUrl) {
-                    playFullscreenVideo(streamUrl, ep.title || `Episódio ${ep.episodeNumber}`);
-                }
-            };
+            card.innerHTML = `
+                <div class="episode-card-thumb-wrap">
+                    ${imgHtml}
+                    ${badgeHtml}
+                    ${duracaoHtml}
+                </div>
+                <div class="episode-card-title">${tituloEpisodio}</div>
+            `;
+
+            card.onclick = () => tocarEpisodioDaLista(epIndex);
             card.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); card.click(); } };
             episodesContainer.appendChild(card);
         });
@@ -1675,7 +2126,7 @@ window.onSeriesInfoLoaded = function(jsonString) {
         tab.textContent = `Temporada ${key}`;
 
         tab.onclick = () => {
-            document.querySelectorAll('.season-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#series-detail-seasons-tabs .season-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             renderSeasonEpisodes(key);
         };
@@ -1691,6 +2142,13 @@ window.onSeriesInfoLoaded = function(jsonString) {
 };
 
 function openVodModal(item, isSeries) {
+    // Série tem tela própria (layout "página cheia" com herói) — filme
+    // continua neste modal centralizado, sem qualquer alteração.
+    if (isSeries) {
+        abrirSeriesDetailScreen(item);
+        return;
+    }
+
     window._lastFocusedVodItem = document.activeElement;
     // topNav permanece visível — o overlay do modal cobre a tela
     window._detailPrevTopNavDisplay = null;
@@ -1956,6 +2414,230 @@ function closeVodModal() {
     localStorage.removeItem('vodDetailIsSeries');
 
     // Devolve foco ao card que abriu
+    if (window._lastFocusedVodItem && typeof window._lastFocusedVodItem.focus === 'function') {
+        setTimeout(() => { window._lastFocusedVodItem.focus(); }, 50);
+    }
+}
+
+// ==========================================
+// Tela de Detalhes de Série — página cheia com herói (backdrop grande),
+// separada do modal de filme (#vod-detail-screen) de propósito: são fluxos
+// visuais diferentes e mexer num não pode voltar a afetar o outro.
+// ==========================================
+
+function abrirSeriesDetailScreen(item) {
+    window._lastFocusedVodItem = document.activeElement;
+
+    // Proteção: se o navegador ainda estiver em fullscreen nativo de um
+    // episódio anterior (às vezes o Escape não dispara o exit a tempo), a
+    // tela ficava renderizada só dentro da caixa antiga do fullscreen,
+    // cortada. Força sair antes de desenhar.
+    if (document.fullscreenElement || document.webkitIsFullScreen) {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }
+
+    const screen      = document.getElementById('series-detail-screen');
+    const inner       = document.getElementById('series-modal-inner');
+    const mainLoader  = document.getElementById('series-detail-main-loader');
+    const loader      = document.getElementById('series-detail-loader');
+    const backdrop    = document.getElementById('series-detail-backdrop');
+    const poster      = document.getElementById('series-detail-poster');
+    const logoEl      = document.getElementById('series-detail-logo');
+    const titleEl     = document.getElementById('series-detail-title');
+    const origEl      = document.getElementById('series-detail-original');
+    const overviewEl  = document.getElementById('series-detail-overview');
+    const metaEl      = document.getElementById('series-detail-meta');
+    const creditsEl   = document.getElementById('series-detail-credits');
+    const directorEl  = document.getElementById('series-detail-director');
+    const castEl      = document.getElementById('series-detail-cast');
+
+    window._vodDetailItem   = item;
+    window._vodDetailSeries = true;
+    window.currentTmdb      = null;
+
+    localStorage.setItem('vodDetailItem', JSON.stringify(item));
+    localStorage.setItem('vodDetailIsSeries', '1');
+
+    if (inner) { inner.style.transition = 'none'; inner.style.opacity = '0'; }
+    if (backdrop) { backdrop.style.transition = 'none'; backdrop.style.opacity = '0'; backdrop.style.backgroundImage = ''; }
+    if (mainLoader) mainLoader.style.display = 'block';
+
+    if (poster)  poster.src = item.cover || '';
+    if (titleEl) { titleEl.textContent = item.name || ''; titleEl.style.display = 'block'; }
+    if (logoEl)  { logoEl.style.display = 'none'; logoEl.src = ''; }
+    if (origEl)  origEl.textContent = '';
+    if (overviewEl) overviewEl.textContent = 'Buscando informações...';
+    if (metaEl) metaEl.innerHTML = '';
+    if (creditsEl) creditsEl.style.display = 'none';
+
+    const seasonsTabs = document.getElementById('series-detail-seasons-tabs');
+    const episodesRow = document.getElementById('series-detail-episodes-row');
+    if (seasonsTabs) seasonsTabs.innerHTML = '';
+    if (episodesRow) episodesRow.innerHTML = '<div class="spinner" style="--spinner-size:36px;"></div>';
+
+    if (screen) screen.style.display = 'flex';
+
+    const btnBack = document.getElementById('series-detail-back-btn');
+    if (btnBack) btnBack.onclick = fecharSeriesDetailScreen;
+
+    // Botão Favoritar
+    const btnFav = document.getElementById('series-detail-btn-fav');
+    if (btnFav) {
+        const favId = item.seriesId || item.streamId;
+        const marcarFav = (ativo) => {
+            btnFav.classList.toggle('is-favorito', !!ativo);
+            // Removido texto para ficar apenas o ícone, conforme anexo 2
+        };
+        if (window.AndroidApp && window.AndroidApp.isFavorite) {
+            marcarFav(window.AndroidApp.isFavorite(favId, 'series'));
+        }
+        btnFav.onclick = () => {
+            if (!window.AndroidApp || !window.AndroidApp.addFavorite) return;
+            marcarFav(window.AndroidApp.addFavorite(JSON.stringify({
+                id: favId,
+                titulo: item.name || '',
+                posterPath: item.cover || '',
+                tipo: 'series'
+            })));
+        };
+    }
+
+    // Botão Assistir — toca o primeiro episódio da primeira temporada assim
+    // que a lista carregar (guardado em window._seriesAutoplayList).
+    const btnPlay = document.getElementById('series-detail-btn-play');
+    if (btnPlay) {
+        btnPlay.onclick = () => {
+            const lista = window._seriesAutoplayList;
+            if (lista && lista.length) {
+                tocarEpisodioDaLista(0);
+            }
+        };
+        setTimeout(() => btnPlay.focus(), 150);
+    }
+
+    // Botão Minha Lista — o app não tem esse conceito no backend nativo
+    // (só favoritos), então guarda localmente por enquanto.
+    const btnList = document.getElementById('series-detail-btn-list');
+    if (btnList) {
+        const listId = item.seriesId || item.streamId;
+        const lerMinhaLista = () => { try { return JSON.parse(localStorage.getItem('sh-minha-lista') || '[]'); } catch (e) { return []; } };
+        const marcarLista = (ativo) => {
+            btnList.classList.toggle('is-favorito', !!ativo);
+            const label = btnList.lastChild;
+            if (label && label.nodeType === Node.TEXT_NODE) {
+                label.textContent = ativo ? ' Na Minha Lista ' : ' Minha Lista ';
+            }
+        };
+        marcarLista(lerMinhaLista().includes(listId));
+        btnList.onclick = () => {
+            const lista = lerMinhaLista();
+            const idx = lista.indexOf(listId);
+            const agoraNaLista = idx === -1;
+            if (agoraNaLista) lista.push(listId); else lista.splice(idx, 1);
+            localStorage.setItem('sh-minha-lista', JSON.stringify(lista));
+            marcarLista(agoraNaLista);
+            avisoRapido(agoraNaLista ? 'Adicionado à Minha Lista' : 'Removido da Minha Lista');
+        };
+    }
+
+    // "Ver mais" — só aparece quando a sinopse realmente estoura 2 linhas.
+    // Toggle "Ver mais/menos" removido a pedido do usuário
+    const overviewToggle = document.getElementById('series-detail-overview-toggle');
+    if (overviewToggle) overviewToggle.style.display = 'none';
+
+    fetchTmdbData(item.name, true).then(tmdb => {
+        window.currentTmdb = tmdb;
+
+        if (mainLoader) mainLoader.style.display = 'none';
+        if (inner) { inner.style.transition = 'opacity 0.4s ease'; inner.style.opacity = '1'; }
+        if (loader) loader.style.display = 'none';
+
+        if (tmdb) {
+            if (tmdb.backdropUrl && backdrop) {
+                backdrop.style.backgroundImage = `url('${tmdb.backdropUrl}')`;
+                backdrop.style.transition = 'opacity 0.8s ease';
+                backdrop.style.opacity = '1';
+            }
+            if (poster) poster.src = tmdb.posterUrl || item.cover || '';
+            if (tmdb.logoUrl && logoEl) {
+                logoEl.src = tmdb.logoUrl;
+                logoEl.style.display = 'block';
+                if (titleEl) titleEl.style.display = 'none';
+            } else if (titleEl) {
+                titleEl.textContent = tmdb.title || item.name || '';
+                titleEl.style.display = 'block';
+            }
+            if (origEl && tmdb.originalTitle && tmdb.originalTitle !== (tmdb.title || item.name)) {
+                origEl.textContent = tmdb.originalTitle;
+            }
+            if (overviewEl) {
+                overviewEl.classList.remove('expanded');
+                overviewEl.textContent = tmdb.overview || '';
+                const toggle = document.getElementById('series-detail-overview-toggle');
+                if (toggle) toggle.style.display = 'none';
+            }
+
+            let metaHtml = '';
+            if (tmdb.releaseDate) {
+                metaHtml += `<span style="display:flex;align-items:center;gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${tmdb.releaseDate}</span>`;
+            }
+            if (tmdb.genres && tmdb.genres.length) {
+                metaHtml += `<span style="display:flex;align-items:center;gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg> ${tmdb.genres.slice(0,3).join(', ')}</span>`;
+            }
+            const rating = tmdb.voteAverage ? String(tmdb.voteAverage).replace('.0','') : (item.rating || '');
+            if (rating) {
+                metaHtml += `<span style="display:flex;align-items:center;gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ${rating}</span>`;
+            }
+            if (metaEl) metaEl.innerHTML = metaHtml;
+
+            const hasDir = tmdb.director && tmdb.director.length;
+            const hasCast = tmdb.cast && tmdb.cast.length;
+            if ((hasDir || hasCast) && creditsEl) {
+                creditsEl.style.display = 'flex';
+                if (hasDir && directorEl) {
+                    directorEl.style.display = 'flex';
+                    const span = directorEl.querySelector('.content');
+                    if (span) span.innerHTML = `<span style="color:rgba(255,255,255,0.6)">Direção:</span> ${tmdb.director.join(', ')}`;
+                } else if (directorEl) {
+                    directorEl.style.display = 'none';
+                }
+                if (hasCast && castEl) {
+                    castEl.style.display = 'flex';
+                    const span = castEl.querySelector('.content');
+                    if (span) span.innerHTML = `<span style="color:rgba(255,255,255,0.6)">Elenco:</span> ${tmdb.cast.slice(0,10).join(', ')}`;
+                } else if (castEl) {
+                    castEl.style.display = 'none';
+                }
+            } else if (creditsEl) {
+                creditsEl.style.display = 'none';
+            }
+        } else {
+            if (titleEl) titleEl.style.display = 'block';
+            if (overviewEl) {
+                overviewEl.classList.remove('expanded');
+                overviewEl.textContent = 'Temporadas incríveis esperam por você com ' + item.name + '.';
+            }
+            const toggle = document.getElementById('series-detail-overview-toggle');
+            if (toggle) toggle.style.display = 'none';
+        }
+
+        if (window.AndroidApp && window.AndroidApp.getSeriesInfo) {
+            window.AndroidApp.getSeriesInfo(item.seriesId || item.streamId);
+        } else if (window.WebBridge && window.WebBridge.getSeriesInfo) {
+            window.WebBridge.getSeriesInfo(item.seriesId || item.streamId);
+        }
+    });
+}
+
+function fecharSeriesDetailScreen() {
+    const screen = document.getElementById('series-detail-screen');
+    if (screen) screen.style.display = 'none';
+
+    localStorage.removeItem('vodDetailItem');
+    localStorage.removeItem('vodDetailIsSeries');
+    window._seriesAutoplayList = null;
+
     if (window._lastFocusedVodItem && typeof window._lastFocusedVodItem.focus === 'function') {
         setTimeout(() => { window._lastFocusedVodItem.focus(); }, 50);
     }
@@ -2971,7 +3653,6 @@ function setupFullscreenPlayer() {
     const progress = document.getElementById('fs-progress');
     const timeCurrent = document.getElementById('fs-time-current');
     const timeTotal = document.getElementById('fs-time-total');
-    const btnBack = document.getElementById('fs-btn-back');
     const btnFullscreen = document.getElementById('fs-btn-fullscreen');
 
     let uiTimeout;
@@ -3063,34 +3744,26 @@ function setupFullscreenPlayer() {
         showUi();
     });
 
+    // Autoplay do próximo episódio: só entra em ação quando o player foi
+    // aberto a partir da lista de episódios da série (window._seriesAutoplayList).
+    // Filme e episódio avulso fora dessa lista simplesmente terminam, como antes.
+    fsPlayer.addEventListener('ended', () => {
+        const lista = window._seriesAutoplayList;
+        const atual = window._seriesAutoplayIndex;
+        if (!lista || atual == null || atual < 0) return;
+        const proximo = atual + 1;
+        if (lista[proximo]) {
+            tocarEpisodioDaLista(proximo);
+        }
+    });
+
     fsPlayer.addEventListener('pause', () => {
         iconPause.style.display = 'none';
         iconPlay.style.display = 'block';
         showUi();
     });
 
-    btnBack.addEventListener('click', (e) => {
-        if(e) e.stopPropagation();
-        closeFullscreenPlayer();
-    });
-
-    btnFullscreen.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // No APK a Fullscreen API não se aplica: o container já ocupa a tela
-        // toda por CSS, e a WebView a ignora sem onShowCustomView (ver nota
-        // acima do playerEstaEmTelaCheia). Insistir nela dentro do #tv-canvas,
-        // que é transformado, é o que corrompia a imagem em 4K.
-        // No navegador ela funciona e continua valendo.
-        if (window.AndroidApp) return;
-
-        if (!document.fullscreenElement && !document.webkitIsFullScreen) {
-            if (fsContainer.requestFullscreen) fsContainer.requestFullscreen();
-            else if (fsContainer.webkitRequestFullscreen) fsContainer.webkitRequestFullscreen();
-        } else {
-            if(document.exitFullscreen) document.exitFullscreen();
-            else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
-        }
-    });
+    // btnBack e btnFullscreen foram removidos do HTML
 
     const onFullscreenChange = () => {
         if (!document.fullscreenElement && !document.webkitIsFullScreen) {
@@ -3315,15 +3988,11 @@ function initSearchKeyboard() {
     const inputField = document.getElementById('search-input-field');
     const keys = document.querySelectorAll('.sk-key');
 
-    // Fora da TV o teclado da tela sai e a busca passa a reagir à digitação.
-    // (o readonly já foi removido junto com o dos campos de login)
-    if (!USA_TECLADO_VIRTUAL) {
-        const tecladoBusca = document.getElementById('search-virtual-keyboard');
-        if (tecladoBusca) tecladoBusca.style.display = 'none';
-        if (inputField) {
-            inputField.addEventListener('input', () => realizarBusca(inputField.value));
-        }
-        return;
+    // Fora da TV a busca também reage à digitação nativa (o readonly já foi
+    // removido junto com o dos campos de login), mas o teclado na tela continua
+    // visível e clicável — útil pra testar no navegador sem perder o padrão da TV.
+    if (!USA_TECLADO_VIRTUAL && inputField) {
+        inputField.addEventListener('input', () => realizarBusca(inputField.value));
     }
 
     keys.forEach(key => {
@@ -3503,10 +4172,10 @@ window.handleAndroidBack = function() {
         return;
     }
 
-    // 1. Se o player de vídeo em tela cheia estiver aberto, fecha ele
+    // 1. Se o player de vídeo em tela cheia estiver aberto, pede confirmação
     const playerContainer = document.getElementById('fs-player-container');
     if (playerContainer && playerContainer.style.display !== 'none') {
-        closeFullscreenPlayer();
+        abrirExitModal();
         return;
     }
 
@@ -3514,6 +4183,20 @@ window.handleAndroidBack = function() {
     const vodDetailScreen = document.getElementById('vod-detail-screen');
     if (vodDetailScreen && vodDetailScreen.style.display !== 'none') {
         closeVodModal();
+        return;
+    }
+
+    // 2.1. Se a tela de detalhes de série estiver aberta, fecha ela
+    const seriesDetailScreen = document.getElementById('series-detail-screen');
+    if (seriesDetailScreen && seriesDetailScreen.style.display !== 'none') {
+        fecharSeriesDetailScreen();
+        return;
+    }
+
+    // 2.5. Se a tela de catálogo por streaming (Netflix, etc.) estiver aberta, fecha ela
+    const providerScreen = document.getElementById('provider-screen');
+    if (providerScreen && providerScreen.style.display !== 'none') {
+        fecharProviderScreen();
         return;
     }
 
@@ -3583,10 +4266,18 @@ let lastFocusedBeforeExit = null;
 function abrirExitModal() {
     lastFocusedBeforeExit = document.activeElement;
     const modal = document.getElementById('exit-confirm-modal');
+    const playerContainer = document.getElementById('fs-player-container');
+    const titleEl = modal ? modal.querySelector('.exit-modal-title') : null;
+    if (titleEl) {
+        if (playerContainer && playerContainer.style.display !== 'none') {
+            titleEl.textContent = 'Deseja realmente fechar a reprodução?';
+        } else {
+            titleEl.textContent = 'Deseja realmente sair do aplicativo?';
+        }
+    }
     if (modal) {
         modal.style.display = 'flex';
         setTimeout(() => modal.classList.add('show'), 10);
-        // Foca no botão "Não" por padrão por segurança
         setTimeout(() => {
             const btnNo = document.getElementById('exit-btn-no');
             if (btnNo) btnNo.focus();
@@ -3609,6 +4300,12 @@ function fecharExitModal() {
 }
 
 function confirmarSaida() {
+    const playerContainer = document.getElementById('fs-player-container');
+    if (playerContainer && playerContainer.style.display !== 'none') {
+        fecharExitModal();
+        closeFullscreenPlayer();
+        return;
+    }
     if (window.AndroidApp && window.AndroidApp.exitApp) {
         window.AndroidApp.exitApp();
     }

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.2",
-  "date": "2026-07-22",
-  "notes": "Ajustes na tela demo (enquadramento, cores e foco).",
-  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.2/app-release.apk"
+  "version": "1.0.3",
+  "date": "2026-07-24",
+  "notes": "Catálogo por streaming (Netflix e outros), tela de série redesenhada com autoplay, correções de estabilidade e auto-update automático.",
+  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.3/app-release.apk"
 }

@@ -80,7 +80,8 @@ body {
        mas o arquivo é palette com chunk tRNS — já tem transparência. O blend
        somava luminância sobre o branco da marca e estourava em TV com contraste
        agressivo (modo Vivid/Dinâmico). */
-    filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.12));
+    /* Sem drop-shadow: pesava a marca. Clean e leve, sem glow por trás. */
+    filter: none;
 }
 
 @keyframes loader-respira {
@@ -89,38 +90,15 @@ body {
 }
 
 /* ---------- SPINNER (canais, filmes e séries) ----------
-   Anel com rastro em gradiente cônico + ponto luminoso à frente.
-   O mask recorta o miolo, deixando só o anel. */
+   Anel simples compatível com Android TV antigos (sem mask ou conic-gradient) */
 .spinner {
     --spinner-size: 46px;
     width: var(--spinner-size);
     height: var(--spinner-size);
-    position: relative;
     border-radius: 50%;
-    background: conic-gradient(
-        from 0deg,
-        rgba(243, 156, 18, 0) 0%,
-        rgba(243, 156, 18, 0.08) 35%,
-        rgba(243, 156, 18, 0.45) 70%,
-        #f39c12 100%
-    );
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px));
-    mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px));
+    border: 4px solid rgba(243, 156, 18, 0.2);
+    border-top-color: #f39c12;
     animation: spinner-gira 0.9s linear infinite;
-}
-
-/* Ponto luminoso na ponta do rastro */
-.spinner::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 50%;
-    width: 4px;
-    height: 4px;
-    margin-left: -2px;
-    border-radius: 50%;
-    background: #f39c12;
-    box-shadow: 0 0 10px rgba(243, 156, 18, 0.9);
 }
 
 @keyframes spinner-gira {
@@ -447,7 +425,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 64px 0 40px;
+    padding: 0 64px 0 24px;
     background: linear-gradient(to bottom, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.75) 45%, rgba(0, 0, 0, 0) 100%);
     z-index: 9999;
 }
@@ -791,21 +769,14 @@ body {
     text-shadow: 0 2px 4px rgba(0,0,0,0.8);
 }
 
-.badge-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 12px;
-}
-
 .fs-control-btn:focus {
     outline: none;
-    background-color: #f39c12 !important;
+    background-color: #ffffff !important;
     color: #000000 !important;
     transform: scale(1.15);
-    box-shadow: 0 0 15px rgba(243, 156, 18, 0.6);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
     border-radius: 50%;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 .fs-control-btn:focus svg {
     stroke: #000000 !important;
@@ -877,51 +848,6 @@ body {
 }
 
 /* Streaming Section */
-.streaming-section {
-    padding: 16px 64px;
-}
-
-.section-title {
-    font-size: 13px;
-    font-weight: 700;
-    margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.icon-small {
-    font-size: 10px;
-}
-
-.streaming-row {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    padding-bottom: 10px;
-}
-
-.streaming-card {
-    width: 100px;
-    height: 58px;
-    background-color: #222;
-    border-radius: 10px;
-    border: 2px solid transparent;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, opacity 0.2s, filter 0.2s;
-    flex-shrink: 0;
-}
-
-.streaming-card:hover, .streaming-card:focus {
-    transform: scale(1.08);
-    border-color: white;
-}
-
 /* Explore Button */
 .explore-btn-container {
     display: flex;
@@ -1149,20 +1075,6 @@ body {
     gap: 30px;
 }
 
-.spinner {
-    width: 60px;
-    height: 60px;
-    border: 4px solid rgba(255, 255, 255, 0.1);
-    border-left-color: #ffffff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
 #sync-status-text {
     font-size: 15px;
     font-weight: 700;
@@ -1309,6 +1221,7 @@ body {
     display: flex;
     align-items: center;
     gap: 14px;
+    text-transform: uppercase;
     /* Padding-top alto: o degradê sobe bem mais que a faixa de texto, dando o
        esmaecimento longo e harmonioso pedido. */
     padding: 130px 22px 18px;
@@ -1968,8 +1881,10 @@ body {
     border-radius: 8px;
     padding: 20px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 20px;
+    /* Capa menor pra caber pelo menos 8 colunas nas telas de Filmes/Séries
+       (antes 180px+1fr esticava demais e só cabiam ~4). */
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 14px;
     overflow-y: auto;
     align-content: start;
 }
@@ -2035,7 +1950,7 @@ body {
     width: var(--tv-w);
     height: var(--tv-h);
     background: rgba(0,0,0,0.93);
-    z-index: 9999;
+    z-index: 100000; /* Must be > 99999 (fs-player-container) */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2058,7 +1973,7 @@ body {
     gap: 24px;
     width: 400px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
-    z-index: 10000;
+    z-index: 100001;
 }
 
 .exit-modal-title {
@@ -2337,111 +2252,6 @@ body {
 }
 
 /* =====================================================
-   HOME TMDB CAROUSEL - Últimos Adicionados
-   ===================================================== */
-.home-section-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: rgba(255,255,255,0.5);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-bottom: 16px;
-}
-
-.tmdb-carousel-track {
-    display: flex;
-    gap: 20px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 10px;
-}
-
-.tmdb-carousel-track::-webkit-scrollbar { display: none; }
-
-.tmdb-card {
-    flex: 0 0 300px;
-    scroll-snap-align: start;
-    border-radius: 12px;
-    overflow: hidden;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    cursor: pointer;
-    transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
-    position: relative;
-    outline: none;
-}
-
-.tmdb-card:hover, .tmdb-card:focus {
-    transform: scale(1.04) translateY(-4px);
-    border-color: rgba(255,255,255,0.5);
-    box-shadow: 0 16px 40px rgba(0,0,0,0.6);
-}
-
-.tmdb-card-poster {
-    width: 100%;
-    height: 170px;
-    object-fit: cover;
-    display: block;
-}
-
-.tmdb-card-body {
-    padding: 14px 16px;
-}
-
-.tmdb-card-logo {
-    max-height: 40px;
-    max-width: 180px;
-    object-fit: contain;
-    display: block;
-    margin-bottom: 8px;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
-}
-
-.tmdb-card-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 6px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.tmdb-card-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-
-.tmdb-star {
-    color: #f5c518;
-    font-size: 13px;
-}
-
-.tmdb-rating {
-    font-size: 13px;
-    font-weight: 600;
-    color: #fff;
-}
-
-.tmdb-year {
-    font-size: 12px;
-    color: rgba(255,255,255,0.45);
-}
-
-.tmdb-card-overview {
-    font-size: 12px;
-    color: rgba(255,255,255,0.55);
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-/* =====================================================
    FAVORITOS - Categoria especial no topo
    ===================================================== */
 .favorites-category-item {
@@ -2519,17 +2329,25 @@ body {
     width: 100%;
     height: var(--tv-h);
     margin-top: 0;
-    padding: 40px;
+    padding: 18px 40px;
     gap: 40px;
     background-color: #0b0b0d;
 }
 
 .search-left-panel {
-    width: 380px;
+    width: 360px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 8px;
     flex-shrink: 0;
+    /* Em janelas de navegador mais baixas que a altura de projeto da TV, o
+       teclado virtual (7 linhas) não cabia e a fileira de ações (backspace/
+       limpar/espaço) ficava cortada embaixo, fora da tela. Teclado menor
+       (abaixo) resolve a maioria dos casos; o scroll fica como rede de
+       segurança pra janelas realmente baixas. */
+    max-height: 100%;
+    overflow-y: auto;
+    padding-right: 4px;
 }
 
 .search-input-wrapper {
@@ -2548,7 +2366,7 @@ body {
 
 #search-input-field {
     width: 100%;
-    height: 48px;
+    height: 42px;
     background-color: #16161a;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
@@ -2562,17 +2380,17 @@ body {
 .search-keyboard {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 5px;
 }
 
 .sk-row {
     display: flex;
-    gap: 8px;
+    gap: 5px;
 }
 
 .sk-key {
-    width: 56px;
-    height: 48px;
+    width: 46px;
+    height: 38px;
     background-color: #16161a;
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 6px;
@@ -2590,9 +2408,8 @@ body {
 .sk-key:focus, .sk-key:hover {
     background-color: #ffffff;
     color: #000000;
-    transform: scale(1.08);
-    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.25);
     border-color: #ffffff;
+    outline: none;
 }
 
 /* Botões especiais do teclado virtual */
@@ -2608,6 +2425,17 @@ body {
     flex-grow: 3;
     width: auto;
     min-width: 56px;
+}
+
+/* Depois de .sk-action/.sk-space de propósito: essas duas têm fundo próprio
+   (#212126) que, com a mesma especificidade, vencia o branco do :focus/:hover
+   — a tecla marcava a borda mas o fundo continuava escuro. */
+.sk-key.sk-action:focus,
+.sk-key.sk-action:hover,
+.sk-key.sk-space:focus,
+.sk-key.sk-space:hover {
+    background-color: #ffffff;
+    color: #000000;
 }
 
 .search-right-panel {
@@ -2645,10 +2473,18 @@ body {
 
 #search-movies-grid, #search-series-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 155px));
+    gap: 14px;
+    /* Padding do container igual ao gap entre capas — antes herdava 20px do
+       .vod-col-grid, folga maior que o espaçamento entre os cards. */
+    padding: 14px;
     align-content: start;
     width: 100%;
+    /* Sem card cinza de fundo herdado do .vod-col-grid: com poucos
+       resultados, aquele painel de largura total sobrava vazio à direita/
+       embaixo do único item, parecendo um bloco cinza "quebrado". */
+    background: transparent;
+    border-radius: 0;
 }
 
 /* =======================================================
@@ -2661,7 +2497,7 @@ body {
     /* 560px é a medida de projeto (16:9). O min() só entra quando o canvas
        fica mais baixo que 720px — painel ultralargo, por exemplo — para o
        banner não ultrapassar a tela e cortar as fileiras de baixo. */
-    height: min(560px, calc(var(--tv-h) * 0.78));
+    height: min(500px, calc(var(--tv-h) * 0.71));
     overflow: hidden;
     background: #000;
     /* Banner encosta nas bordas da tela: sem cantos arredondados nem margem,
@@ -2694,14 +2530,9 @@ body {
 .spotlight-gradient {
     position: absolute;
     inset: 0;
-    /* Camada 1: dither. Ladrilho de 64x64 com amplitude de ~1-2 niveis em 255.
-       Invisivel como textura, mas desloca cada pixel o suficiente para quebrar
-       o plato de quantizacao — que e o que aparece como "camadas" no degrade.
-       Custo: uma textura de 3KB ladrilhada pela GPU. Nada a ver com a
-       superficie de 1920x560 que foi removida daqui antes.
-
-       Camadas 2 e 3: o degrade em si, agora com o dobro de paradas. Salto
-       menor entre paradas = degrau menor onde o 8 bits arredonda. */
+    /* Degradê com paradas graduais — salto pequeno entre paradas reduz o
+       degrau onde o 8 bits arredonda, mas sozinho ainda bandeia em painéis
+       4K reais (o preview de desktop dissimula isso, a TV não). */
     background:
         linear-gradient(to right,
             #000 0%, #000 28%,
@@ -2725,18 +2556,33 @@ body {
     z-index: 1;
 }
 
-/* O banding já é combatido pelas paradas graduais do gradiente acima.
-   A camada de ruído que havia aqui foi removida: em tela cheia de TV ela
-   criava uma superfície extra de 1920x560 para compor a cada frame. */
+/* Ruído em SVG, ladrilhado 96x96 — quebra o platô de quantização que aparece
+   como faixas visíveis no degradê acima quando renderizado num painel 4K de
+   verdade. Poucos KB em data-URI, GPU ladrilha a textura, custo desprezível
+   (nada a ver com compor ruído numa superfície do tamanho do banner inteiro). */
+.spotlight-gradient::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    z-index: 2;
+}
 
 .spotlight-content {
     position: absolute;
     inset: 0;
     z-index: 2;
     display: flex;
-    align-items: center;
+    /* Alinhado embaixo com padding fixo, não mais centralizado — centralizar
+       fazia a sinopse encostar na seção seguinte quando o banner ficava mais
+       baixo que 500px (janela sem tela cheia, --tv-h menor). */
+    align-items: flex-end;
     gap: 48px;
-    padding: 110px 40px 0;
+    padding: 110px 24px 32px;
 }
 
 .spotlight-poster {
@@ -2846,7 +2692,7 @@ body {
     line-height: 1.65;
     color: rgba(255,255,255,0.7);
     display: -webkit-box;
-    -webkit-line-clamp: 6;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -2926,23 +2772,23 @@ body {
 
 /* Seções da Home (Novos Filmes/Séries) */
 .home-section {
-    padding: 24px 40px 30px;
+    padding: 12px 24px 12px;
 }
 
 .home-section-title {
-    font-size: 19px;
+    font-size: 16px;
     font-weight: 800;
     color: #ffffff;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     letter-spacing: 0.5px;
 }
 
 .section-icon {
-    width: 20px;
-    height: 20px;
+    width: 17px;
+    height: 17px;
     stroke: #f39c12;
 }
 
@@ -2954,7 +2800,7 @@ body {
     align-items: flex-start;
     overflow-x: auto;
     overflow-y: hidden;
-    gap: 20px;
+    gap: 14px;
     padding: 10px 0;
     scroll-behavior: smooth;
     scrollbar-width: none;
@@ -2965,16 +2811,229 @@ body {
 }
 
 .home-row .vod-item {
-    flex: 0 0 190px;
-    width: 190px;
-    height: 285px;
+    flex: 0 0 170px;
+    width: 170px;
+    height: 255px;
     padding-top: 0;
+}
+
+.home-row .vod-item-title {
+    font-size: 14px;
+    padding: 16px 8px 8px;
 }
 
 .home-row::after {
     content: '';
     flex: 0 0 40px;
     height: 1px;
+}
+
+/* =====================================================
+   Tela de Catálogo por Streaming (Netflix, etc. via TMDB)
+   ===================================================== */
+.provider-screen {
+    display: flex;
+    width: 100%;
+    height: var(--tv-h);
+    background-color: #000;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.provider-sidebar {
+    flex: 0 0 60px;
+    background-color: #0a0a0a;
+    border-right: 1px solid #1c1c1c;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 0;
+    gap: 20px;
+}
+
+.provider-sidebar-logo {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    border-radius: 7px;
+}
+
+.provider-sidebar-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.12s linear;
+}
+
+.provider-sidebar-btn:hover,
+.provider-sidebar-btn:focus {
+    background: #fff;
+    color: #000;
+    outline: none;
+}
+
+.provider-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+}
+
+.provider-hero {
+    position: relative;
+    width: 100%;
+    height: 46vh;
+    min-height: 320px;
+    background-color: #111;
+}
+
+.provider-hero-backdrop {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center top;
+    background-color: #111;
+}
+
+/* Ruído em SVG, mesmo truque do banner da home — quebra o platô de
+   quantização que aparece como faixas visíveis num painel 4K de verdade. */
+.provider-hero-backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+}
+
+.provider-hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top,
+        #000 0%, #000 8%,
+        rgba(0, 0, 0, 0.9) 16%, rgba(0, 0, 0, 0.78) 24%,
+        rgba(0, 0, 0, 0.64) 32%, rgba(0, 0, 0, 0.5) 40%,
+        rgba(0, 0, 0, 0.36) 48%, rgba(0, 0, 0, 0.24) 56%,
+        rgba(0, 0, 0, 0.14) 65%, rgba(0, 0, 0, 0.06) 75%,
+        rgba(0, 0, 0, 0.02) 85%, transparent 100%);
+    z-index: 1;
+}
+
+.provider-hero-info {
+    position: absolute;
+    left: 32px;
+    right: 32px;
+    bottom: 24px;
+    z-index: 2;
+}
+
+.provider-hero-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.provider-hero-subtitle {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.75);
+    max-width: 640px;
+    margin-top: 8px;
+    line-height: 1.5;
+}
+
+.provider-hero-meta {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 10px;
+}
+
+/* Linha "Top 10": número grande vazado atrás do pôster */
+.provider-top-item {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: flex-end;
+}
+
+.provider-top-rank {
+    font-size: 84px;
+    font-weight: 900;
+    line-height: 1;
+    color: transparent;
+    -webkit-text-stroke: 2px rgba(255, 255, 255, 0.55);
+    margin-right: -16px;
+    user-select: none;
+    pointer-events: none;
+}
+
+.provider-top-poster {
+    width: 130px;
+    height: 195px;
+    border-radius: 6px;
+    object-fit: cover;
+    background-color: #111;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
+    border: 3px solid transparent;
+    cursor: pointer;
+    transition: border-color 0.12s linear;
+}
+
+.provider-top-poster:hover,
+.provider-top-poster:focus {
+    border-color: #ffffff;
+    outline: none;
+}
+
+/* Cards de logo na seção "Escolha seu Streaming" */
+.streaming-row {
+    flex-wrap: nowrap;
+}
+
+.streaming-row::after {
+    content: none;
+}
+
+.streaming-row .streaming-logo-card {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    max-width: 235px;
+    height: 88px;
+}
+
+.streaming-logo-card {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 3px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.12s linear;
+}
+
+.streaming-logo-card:hover,
+.streaming-logo-card:focus {
+    border-color: #ffffff;
+    outline: none;
+}
+
+.streaming-logo-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 /* Cabeçalho da Busca */
@@ -2990,23 +3049,21 @@ body {
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
     border: none;
-    color: #000000;
+    color: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
+    transition: background-color 0.12s linear, color 0.12s linear;
     outline: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+.search-back-round-btn:hover,
 .search-back-round-btn:focus {
-    background: #f39c12;
-    color: #ffffff;
-    transform: scale(1.1);
-    box-shadow: 0 0 0 4px rgba(243, 156, 18, 0.4);
+    background: #ffffff;
+    color: #000000;
 }
 
 .search-header-title {
@@ -3049,56 +3106,78 @@ body {
     object-fit: contain !important;
 }
 
-/* Season tabs and episode cards */
+/* Botões de seleção de temporada — estilo chip/pill */
 .season-tab {
-    background: rgba(255, 255, 255, 0.05);
-    border: 2px solid transparent;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.07);
+    border: 2px solid rgba(255, 255, 255, 0.15);
     border-radius: 6px;
-    color: rgba(255, 255, 255, 0.6);
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: bold;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
     cursor: pointer;
     font-family: 'Inter', sans-serif;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
     white-space: nowrap;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.season-tab:focus, .season-tab.active {
+.season-tab:hover,
+.season-tab:focus {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+    border-color: rgba(255, 255, 255, 0.4);
+    outline: none;
+}
+.season-tab.active {
     background: #ffffff;
     color: #000000;
     border-color: #ffffff;
-    transform: scale(1.05);
-    outline: none;
 }
+
+/* Cards de episódio premium — thumbnail com zoom, título embaixo (item 5) */
 .episode-card {
-    position: relative;
-    flex: 0 0 220px;
-    width: 220px;
-    height: 130px;
-    border-radius: 8px;
-    overflow: hidden;
-    cursor: pointer;
-    background: #111;
+    flex: 0 0 200px;
+    width: 200px;
+    background: #111111;
+    border-radius: 10px;
     border: 3px solid transparent;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
-.episode-card:focus {
-    border-color: #ffffff;
-    box-shadow: 0 10px 25px rgba(255, 255, 255, 0.25);
-    transform: scale(1.04);
+.episode-card:hover,
+.episode-card:focus,
+.episode-card.active {
     outline: none;
-    z-index: 10;
+    transform: translateY(-4px);
+    border-color: #ffffff;
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6);
+}
+.episode-card-thumb-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: #000;
 }
 .episode-card-thumb {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transition: transform 0.35s ease;
+}
+.episode-card:hover .episode-card-thumb,
+.episode-card:focus .episode-card-thumb {
+    transform: scale(1.08);
 }
 .episode-card-badge {
     position: absolute;
     top: 8px;
     left: 8px;
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.85);
     color: #fff;
     font-size: 11px;
     font-weight: 700;
@@ -3106,77 +3185,415 @@ body {
     border-radius: 4px;
     z-index: 2;
 }
-.episode-card-info {
+.episode-card-duration {
     position: absolute;
-    bottom: 0;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.85);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 6px;
+    border-radius: 4px;
+    z-index: 2;
+}
+.episode-card-title {
+    margin: 0;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+/* =====================================================
+   TELA DE DETALHES DE SÉRIE — página cheia com herói, separada do modal de
+   filme de propósito. Reaproveita o design system do resto do app: preto
+   #000/#0a0a0a, branco como única cor de seleção/hover, laranja #f39c12 só
+   como o acento já usado nos ícones de seção em todo lugar. Escala de
+   espaçamento fixa: 8 / 16 / 24 / 32 / 48px.
+   ===================================================== */
+.sd-screen {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 9000;
+    background: #000;
+    overflow: hidden;
+}
+
+.sd-back-btn {
+    display: none !important;
+}
+
+.sd-main-loader {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin: -24px 0 0 -24px;
+    z-index: 15;
+}
+
+.sd-inner {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+    padding: 40px 32px 32px 24px;
+    gap: 28px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    overflow: hidden;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.sd-hero-backdrop {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 70%;
+    height: 75%;
+    background-size: cover;
+    background-position: right top;
+    transition: background-image 0.4s ease;
+    z-index: 0;
+}
+
+.sd-hero-backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+}
+
+.sd-hero-gradient {
+    position: absolute;
+    top: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.95) 45%);
-    color: white;
-    padding: 12px 10px 8px;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    z-index: 3;
+    width: 100%;
+    height: 75%;
+    /* Horizontal fade: solid black up to 32% to cover the image's left edge at 30%, then smooth fade */
+    /* Vertical fade: solid black at bottom 15% to cover image's bottom edge, then smooth fade */
+    background:
+        linear-gradient(to right,
+            #000 0%,
+            #000 32%,
+            rgba(0,0,0,0.85) 45%,
+            rgba(0,0,0,0.4) 65%,
+            transparent 100%),
+        linear-gradient(to top,
+            #000 0%,
+            #000 15%,
+            rgba(0,0,0,0.6) 35%,
+            transparent 100%);
+    z-index: 1;
 }
 
-/* VOD DETAIL MODAL - Limpo, estilos movidos para inline no HTML */
-
-
-/* Section titles */
-#vod-detail-series-section h3,
-#vod-detail-related-section h3 {
-    font-size: 16px !important;
-    font-weight: 700 !important;
-    letter-spacing: 2px;
-    color: #f39c12 !important;
-    text-transform: uppercase;
-    margin-bottom: 20px !important;
+.sd-left-panel {
+    position: relative;
+    width: 190px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 2;
+    min-height: 0;
 }
 
-/* Season tabs styling */
-.season-tab {
-    padding: 11px 22px !important;
-    background: rgba(255, 255, 255, 0.06) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 6px !important;
-    color: rgba(255, 255, 255, 0.7) !important;
+.sd-poster-wrap {
+    width: 100%;
+}
+
+.sd-poster {
+    width: 100%;
+    height: auto;
+    max-height: 270px;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #111;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+}
+
+.sd-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sd-action-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 6px;
+    border: 3px solid transparent;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.sd-action-btn:hover,
+.sd-action-btn:focus {
+    background: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+    outline: none;
+}
+
+.sd-action-primary {
+    background: rgba(255, 255, 255, 0.15);
+}
+.sd-action-primary:hover,
+.sd-action-primary:focus {
+    background: #ffffff;
+    color: #000000;
+}
+
+/* Estado: favoritado — fundo escuro com coração vermelho */
+.sd-action-btn.is-favorito {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(231, 76, 60, 0.7);
+    color: #e74c3c;
+}
+/* Hover no estado favoritado: branco com coração vermelho */
+.sd-action-btn.is-favorito:hover,
+.sd-action-btn.is-favorito:focus {
+    background: #ffffff;
+    color: #e74c3c;
+    border-color: #e74c3c;
+    outline: none;
+}
+
+.sd-right-panel {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 2;
+    scrollbar-width: none;
+}
+.sd-right-panel::-webkit-scrollbar {
+    display: none;
+}
+
+.sd-info {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+    max-width: 800px;
+    z-index: 2;
+    padding: 20px 24px 20px 0;
+}
+
+.sd-info-loader {
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+.sd-logo {
+    max-width: 320px;
+    max-height: 100px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.9));
+    margin-bottom: 2px;
+}
+
+.sd-title {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.15;
+    letter-spacing: 0.5px;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+}
+
+.sd-original {
+    margin: 0;
+    font-size: 14px;
     font-weight: 500;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
+    color: rgba(255, 255, 255, 0.6);
 }
 
-.season-tab:hover {
-    background: rgba(255, 255, 255, 0.1) !important;
-    border-color: rgba(243, 156, 18, 0.3) !important;
-}
-
-.season-tab.active {
-    background: #f39c12 !important;
-    color: #000 !important;
-    border-color: #f39c12 !important;
-}
-
-/* Episode cards */
-.episode-card {
-    background: rgba(0, 0, 0, 0.4) !important;
-    border: 1px solid rgba(255, 255, 255, 0.05) !important;
-    border-radius: 8px !important;
-    overflow: hidden;
-    transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, opacity 0.3s ease, filter 0.3s ease;
-}
-
-.episode-card:hover {
-    border-color: rgba(243, 156, 18, 0.3) !important;
-    transform: translateY(-4px);
-    box-shadow: 0 10px 25px rgba(243, 156, 18, 0.15);
-}
-
-.episode-card-badge {
-    background: #f39c12 !important;
-    color: #000 !important;
+.sd-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    font-size: 13px;
     font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+}
+.sd-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.sd-meta svg {
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.sd-credits {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 32px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.75);
+    font-weight: 500;
+}
+
+.sd-credit-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sd-credit-row svg {
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.sd-overview-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 8px;
+}
+.sd-overview-box svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.6);
+}
+.sd-overview-content {
+    flex: 1;
+    min-width: 0;
+}
+#series-detail-overview {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.85);
+    /* Sem clamp: sinopse sempre visível completa */
+}
+#series-detail-overview.expanded {
+    -webkit-line-clamp: unset;
+}
+.sd-overview-toggle {
+    margin-top: 6px;
+    background: none;
+    border: none;
+    padding: 0;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+    opacity: 0.7;
+}
+.sd-overview-toggle:hover,
+.sd-overview-toggle:focus {
+    opacity: 1;
+    outline: none;
+}
+
+.sd-series-section {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    position: relative;
+    z-index: 2;
+    padding: 0 0 16px 0;
+}
+
+.sd-season-tabs {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 12px 0 16px;
+    margin-bottom: 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.sd-season-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.sd-season-title {
+    display: none;
+}
+
+/* ---------- 5. Episódios — cards premium com hover de zoom ---------- */
+.sd-episodes-wrap {
+    position: relative;
+}
+
+.sd-episodes-row {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+}
+.sd-episodes-row::-webkit-scrollbar {
+    display: none;
+}
+
+.sd-ep-nav {
+    position: absolute;
+    top: 40%;
+    transform: translateY(-50%);
+    z-index: 5;
+    width: 36px;
+    height: 56px;
+    border: none;
+    background: rgba(255, 255, 255, 0.9);
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.sd-ep-nav:hover,
+.sd-ep-nav:focus {
+    background: #ffffff;
+    outline: none;
+}
+.sd-ep-nav-prev {
+    left: 0;
+    border-radius: 0 8px 8px 0;
+}
+.sd-ep-nav-next {
+    right: 0;
+    border-radius: 8px 0 0 8px;
 }
 
 /* Related/Recently added cards */
@@ -3204,63 +3621,6 @@ body {
     outline: none;
     z-index: 10;
 }
-
-/* Season Tabs */
-.season-tab {
-    padding: 12px 24px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
-}
-
-.season-tab:hover {
-    background: rgba(255, 255, 255, 0.12);
-}
-
-.season-tab.active {
-    background: #f39c12;
-    color: #000;
-    border-color: #f39c12;
-}
-
-/* Episode Cards */
-.episode-card {
-    min-width: 160px;
-    height: 240px;
-    border-radius: 10px;
-    overflow: hidden;
-    position: relative;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
-}
-
-.episode-card:hover {
-    transform: translateY(-4px);
-}
-
-.episode-card-badge {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: #f39c12;
-    color: #000;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-weight: 600;
-    font-size: 12px;
-}
-
-.episode-card-info {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
-    color: #fff;
-    padding: 40px 12px 12px;
-    font-size: 13px;
-}
-
 
 /* =====================================================
    DESEMPENHO DE NAVEGACAO (TV)

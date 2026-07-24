@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.core.content.FileProvider
@@ -562,6 +564,20 @@ class WebAppInterface(
             webView.evaluateJavascript("javascript:onUpdateError('Link de atualização inválido.')", null)
             return
         }
+        // Sem essa permissão o instalador do sistema interrompe sozinho, sem
+        // explicação nenhuma na nossa UI — melhor falhar cedo com um aviso
+        // claro e já abrir a tela onde o usuário libera "instalar apps
+        // desconhecidos" para este app.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) {
+            val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = Uri.parse("package:${activity.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            activity.startActivity(settingsIntent)
+            webView.evaluateJavascript(
+                "javascript:onUpdateError('Autorize a instalação de apps desconhecidos para este app e tente de novo.')", null)
+            return
+        }
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val dir = File(activity.cacheDir, "updates").apply { mkdirs() }
@@ -614,6 +630,13 @@ class WebAppInterface(
                     }
                 }
                 conn.disconnect()
+
+                // Garante o 100% mesmo quando o servidor não manda Content-Length
+                // (comum em resposta redirecionada/chunked) — sem isto a barra
+                // ficava parada e a mensagem de "download concluído" nunca aparecia.
+                withContext(Dispatchers.Main) {
+                    webView.evaluateJavascript("javascript:onUpdateProgress(100)", null)
+                }
 
                 val uri = FileProvider.getUriForFile(
                     activity, "${activity.packageName}.fileprovider", apk

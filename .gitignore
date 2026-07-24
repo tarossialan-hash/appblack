@@ -24,3 +24,4 @@ webplayer/node_modules/
 # Config local do Claude Code (não versionar)
 .claude/settings.local.json
 *.apk
+.claude-flow/
