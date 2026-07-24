@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
@@ -310,11 +311,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * O PlayerView (Media3) tem controles próprios com foco (D-pad) e, por
+     * padrão, a primeira tecla Voltar só esconde esses controles — o evento
+     * nunca chega em onBackPressed(), que só é chamado quando nenhuma view
+     * filha consome a tecla antes. Resultado: o cliente apertava Voltar e o
+     * player continuava preso na tela, tocando por trás dos controles já
+     * escondidos. dispatchKeyEvent roda ANTES de qualquer view filha, então
+     * intercepta e fecha o player direto, sem dar chance de o controle
+     * "engolir" o evento primeiro.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP && videoNativoAtivo()) {
+            pararVideoNativo()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onBackPressed() {
-        // Player nativo (VOD) tem prioridade: fecha ele direto, sem passar
-        // pelo JS — a WebView por trás nem está com o player em tela cheia
-        // "aberto" do ponto de vista dela, então handleAndroidBack não
-        // saberia o que fazer com isto.
+        // Player nativo (VOD): ver dispatchKeyEvent acima — chega aqui só se
+        // por algum motivo não tiver sido interceptado lá (ex.: back
+        // acionado por gesto/botão do sistema em vez da tecla).
         if (videoNativoAtivo()) {
             pararVideoNativo()
             return

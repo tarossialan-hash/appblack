@@ -1,6 +1,6 @@
 {
-  "version": "1.0.5",
+  "version": "1.0.5.1",
   "date": "2026-07-24",
-  "notes": "Player de Filmes/Séries trocado para um player nativo (ExoPlayer) — corrige de vez a tela partida em 4K, que persistia mesmo depois dos ajustes anteriores. Os controles de reprodução agora são os padrão do Android (play/pausa/avançar, barra de progresso) em vez dos personalizados. TV ao vivo não muda.",
-  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.5/app-release.apk"
+  "notes": "Corrige o player nativo (ExoPlayer, versão 1.0.5) ficar preso na tela ao apertar Voltar — o próprio player capturava a tecla pra só esconder os controles dele, sem fechar. Também adiciona um aviso na tela ao pedir a permissão de VPN (Config > VPN), pra ajudar a identificar onde trava quando não aparece nada.",
+  "apkUrl": "https://github.com/tarossialan-hash/appblack/releases/download/v1.0.5.1/app-release.apk"
 }

@@ -1479,9 +1479,16 @@ function iniciarConfiguracoes() {
             if (!window.AndroidApp || !window.AndroidApp.setDnsFixEnabled) return;
             const dnsLigadoAgora = window.AndroidApp.getDnsFixEnabled
                 ? window.AndroidApp.getDnsFixEnabled() : false;
+            const vaiLigar = !dnsLigadoAgora;
+            // Aviso na hora do clique, antes de qualquer resposta nativa: se
+            // isto aparecer mas o resultado (onDnsFixResult) nunca chegar, o
+            // problema está no lado nativo (diálogo de permissão que não
+            // aparece/não retorna) — não no clique em si, que já confirmou
+            // ter chegado até aqui.
+            if (vaiLigar) avisoRapido('Pedindo permissão de VPN…');
             // O estado real do switch só é confirmado por onDnsFixResult (a
             // permissão de VPN é um diálogo assíncrono do Android).
-            window.AndroidApp.setDnsFixEnabled(!dnsLigadoAgora);
+            window.AndroidApp.setDnsFixEnabled(vaiLigar);
         };
     }
 
