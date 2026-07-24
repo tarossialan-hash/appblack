@@ -25,3 +25,6 @@ webplayer/node_modules/
 .claude/settings.local.json
 *.apk
 .claude-flow/
+
+# Saída/cache do skill /graphify (não é código do app)
+graphify-out/

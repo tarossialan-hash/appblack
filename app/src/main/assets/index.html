@@ -473,6 +473,21 @@
                         <div id="cfg-update-progress" style="display:none; margin-top:14px; height:6px; border-radius:100px; background:rgba(255,255,255,0.1); overflow:hidden;">
                             <div id="cfg-update-progress-fill" style="height:100%; width:0%; border-radius:100px; background:linear-gradient(90deg,#f39c12,#ffb84d); transition:width 0.2s ease;"></div>
                         </div>
+
+                        <!-- Card "o que mudou" — só aparece quando há versão nova -->
+                        <div id="cfg-update-info" class="cfg-update-info" style="display:none;">
+                            <div class="cfg-update-info-header">
+                                <span class="cfg-update-badge">Nova versão</span>
+                                <span class="cfg-update-versions">
+                                    <span id="cfg-update-de"></span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                                    <span id="cfg-update-para"></span>
+                                </span>
+                            </div>
+                            <div class="cfg-update-changelog-title">O que mudou</div>
+                            <ul class="cfg-update-changelog" id="cfg-update-changelog"></ul>
+                        </div>
+
                         <p class="cfg-nota" id="cfg-update-status"></p>
                     </div>
                 </section>

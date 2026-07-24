@@ -1222,11 +1222,14 @@ function verificarAtualizacao() {
     if (btn) btn.classList.add('cfg-opcao-ocupada');
     if (btnInstalar) btnInstalar.style.display = 'none';
 
+    const info = document.getElementById('cfg-update-info');
+    if (info) info.style.display = 'none';
+
     buscarInfoAtualizacao()
         .then(({ dados, remota, local, temUpdate }) => {
             if (temUpdate) {
-                const notas = dados.notes ? ' — ' + dados.notes : '';
-                status.textContent = `Nova versão disponível: ${remota} (instalada: ${local})${notas}`;
+                status.textContent = '';
+                preencherCardUpdateInfo(local, remota, dados.notes);
                 avisoRapido('Atualização disponível: ' + remota);
                 mostrarAcaoUpdate(dados);
                 mostrarAvisoUpdateNoMenu(true);
@@ -1241,6 +1244,43 @@ function verificarAtualizacao() {
         .finally(() => {
             if (btn) btn.classList.remove('cfg-opcao-ocupada');
         });
+}
+
+/** Monta o card "o que mudou": versão de/para em destaque + changelog em
+ *  lista. As notas do version.json vêm como uma frase só, separada por
+ *  vírgula — divide em itens pra não virar um parágrafo corrido. */
+function preencherCardUpdateInfo(local, remota, notas) {
+    const info = document.getElementById('cfg-update-info');
+    const deEl = document.getElementById('cfg-update-de');
+    const paraEl = document.getElementById('cfg-update-para');
+    const lista = document.getElementById('cfg-update-changelog');
+    if (!info) return;
+
+    if (deEl) deEl.textContent = local;
+    if (paraEl) paraEl.textContent = remota;
+
+    if (lista) {
+        lista.innerHTML = '';
+        const itens = (notas || '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+        if (itens.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = 'Melhorias e correções gerais.';
+            lista.appendChild(li);
+        } else {
+            itens.forEach(texto => {
+                const li = document.createElement('li');
+                // Primeira letra maiúscula — os itens vêm em minúscula por
+                // terem sido cortados no meio da frase original.
+                li.textContent = texto.charAt(0).toUpperCase() + texto.slice(1);
+                lista.appendChild(li);
+            });
+        }
+    }
+
+    info.style.display = 'block';
 }
 
 /** Checagem silenciosa, disparada uma vez por sessão logo após o login/sync.
@@ -2989,6 +3029,8 @@ document.addEventListener('keydown', function(e) {
         let focusables;
         const vodScreen = document.getElementById('vod-detail-screen');
         const isVodVisible = vodScreen && window.getComputedStyle(vodScreen).display !== 'none';
+        const seriesScreen = document.getElementById('series-detail-screen');
+        const isSeriesVisible = seriesScreen && window.getComputedStyle(seriesScreen).display !== 'none';
         const telaCfg = document.getElementById('settings-screen');
         const cfgVisivel = telaCfg && telaCfg.style.display !== 'none';
 
@@ -3007,6 +3049,13 @@ document.addEventListener('keydown', function(e) {
             focusables = Array.from(updateModal.querySelectorAll('button, [tabindex="0"]'));
         } else if (isVodVisible) {
             focusables = Array.from(vodScreen.querySelectorAll('button, [tabindex="0"]'));
+        } else if (isSeriesVisible) {
+            // Mesma lógica do modal de filme: sem isto, o D-pad varria o
+            // documento inteiro (fallback genérico abaixo) e podia escapar
+            // pra fora da tela de série, ou considerar candidatos de telas
+            // escondidas por trás — o que tornava a navegação até os
+            // episódios imprevisível.
+            focusables = Array.from(seriesScreen.querySelectorAll('button, [tabindex="0"]'));
         } else {
             focusables = Array.from(document.querySelectorAll('input, button, [tabindex="0"]'));
         }

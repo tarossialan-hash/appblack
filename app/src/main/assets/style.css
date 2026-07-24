@@ -1723,6 +1723,100 @@ body {
     color: #888;
 }
 
+/* Card "o que mudou" — aparece na aba Atualização quando há versão nova */
+.cfg-update-info {
+    margin-top: 16px;
+    background-color: #1a1a1a;
+    border: 1px solid rgba(243, 156, 18, 0.25);
+    border-radius: 10px;
+    padding: 18px 20px;
+    animation: cfgUpdateInfoFadeIn 0.25s ease both;
+}
+
+@keyframes cfgUpdateInfoFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.cfg-update-info-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cfg-update-badge {
+    background: rgba(243, 156, 18, 0.15);
+    border: 1px solid rgba(243, 156, 18, 0.4);
+    color: #f39c12;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
+.cfg-update-versions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.cfg-update-versions svg {
+    width: 15px;
+    height: 15px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.cfg-update-versions #cfg-update-de {
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 600;
+}
+
+.cfg-update-changelog-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888;
+    margin-bottom: 10px;
+}
+
+.cfg-update-changelog {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cfg-update-changelog li {
+    position: relative;
+    padding-left: 18px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.cfg-update-changelog li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #f39c12;
+}
+
 /* Aviso curto de confirmação */
 #aviso-rapido {
     position: absolute;
@@ -2577,12 +2671,12 @@ body {
     inset: 0;
     z-index: 2;
     display: flex;
-    /* Alinhado embaixo com padding fixo, não mais centralizado — centralizar
-       fazia a sinopse encostar na seção seguinte quando o banner ficava mais
-       baixo que 500px (janela sem tela cheia, --tv-h menor). */
-    align-items: flex-end;
+    /* Centralizado de novo, a pedido — a sinopse já está com clamp de 3
+       linhas e o banner mais baixo (500px), então o risco de encostar na
+       seção seguinte que motivou o flex-end de antes ficou bem menor. */
+    align-items: center;
     gap: 48px;
-    padding: 110px 24px 32px;
+    padding: 90px 24px 24px;
 }
 
 .spotlight-poster {
@@ -3256,7 +3350,10 @@ body {
     top: 0;
     right: 0;
     width: 70%;
-    height: 75%;
+    /* Era 75% — parando aí, ficava uma borda seca onde a imagem e o ruído
+       anti-banding acabam e o preto puro do fundo começa, visível como uma
+       faixa horizontal em painel de TV real. 100% elimina a costura. */
+    height: 100%;
     background-size: cover;
     background-position: right top;
     transition: background-image 0.4s ease;
@@ -3279,9 +3376,13 @@ body {
     left: 0;
     right: 0;
     width: 100%;
-    height: 75%;
+    /* Acompanha o backdrop (100%, ver comentário acima) — mesma altura nos
+       dois é o que evita a costura. */
+    height: 100%;
     /* Horizontal fade: solid black up to 32% to cover the image's left edge at 30%, then smooth fade */
-    /* Vertical fade: solid black at bottom 15% to cover image's bottom edge, then smooth fade */
+    /* Vertical fade: preto sólido cresce gradualmente até virar 100% preto
+       bem antes do fim da caixa, então o restante (onde fica o conteúdo
+       rolável) é preto uniforme sem nenhuma transição a mais acontecendo. */
     background:
         linear-gradient(to right,
             #000 0%,
@@ -3291,8 +3392,8 @@ body {
             transparent 100%),
         linear-gradient(to top,
             #000 0%,
-            #000 15%,
-            rgba(0,0,0,0.6) 35%,
+            #000 55%,
+            rgba(0,0,0,0.6) 68%,
             transparent 100%);
     z-index: 1;
 }
